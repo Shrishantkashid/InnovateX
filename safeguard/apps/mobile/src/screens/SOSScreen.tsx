@@ -1,15 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Button, ActivityIndicator, Alert, SafeAreaView } from 'react-native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../navigation/AppNavigator';
+import { View, Text, StyleSheet, ActivityIndicator, Alert, SafeAreaView, TouchableOpacity, Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, GRADIENTS, SPACING, TYPOGRAPHY } from '../theme';
+import GlassCard from '../components/GlassCard';
+import PrimaryButton from '../components/PrimaryButton';
 import { triggerSOS, resolveSOS } from '../services/sosApi';
 import { startWatching, stopWatching } from '../services/locationTracker';
+import { ShieldAlert, MapPin, XCircle, Share2 } from 'lucide-react-native';
 
-type SOSScreenProps = {
-  navigation: NativeStackNavigationProp<RootStackParamList, 'SOS'>;
-};
-
-const SOSScreen = ({ navigation }: SOSScreenProps) => {
+const SOSScreen = ({ navigation }: any) => {
   const [isLoading, setIsLoading] = useState(true);
   const [sosDetails, setSosDetails] = useState<{ sosEventId: string; trackToken: string } | null>(null);
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -21,12 +20,10 @@ const SOSScreen = ({ navigation }: SOSScreenProps) => {
   useEffect(() => {
     const activateSOS = async () => {
       try {
-        // 1. Get initial location
         await startWatching((newCoords) => {
           setCoords(newCoords);
         });
 
-        // 2. Trigger SOS (using placeholder coordinates if location not yet ready)
         const response = await triggerSOS({
           userId: 'user_123',
           latitude: coords?.latitude || 0,
@@ -75,8 +72,6 @@ const SOSScreen = ({ navigation }: SOSScreenProps) => {
   };
 
   const handleResolve = async () => {
-    if (!sosDetails) return;
-    
     Alert.alert(
       'Resolve Incident',
       'Are you sure you want to mark this emergency as resolved?',
@@ -85,7 +80,7 @@ const SOSScreen = ({ navigation }: SOSScreenProps) => {
         { 
           text: 'Confirm', 
           onPress: async () => {
-            await resolveSOS(sosDetails.sosEventId);
+            if (sosDetails) await resolveSOS(sosDetails.sosEventId);
             cleanup();
             navigation.navigate('Home');
           }
@@ -96,107 +91,197 @@ const SOSScreen = ({ navigation }: SOSScreenProps) => {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color="#ff4444" />
+      <LinearGradient colors={GRADIENTS.dark} style={styles.container}>
+        <ActivityIndicator size="large" color={COLORS.error} />
         <Text style={styles.loadingText}>Activating emergency protocol...</Text>
-      </View>
+      </LinearGradient>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+    <LinearGradient colors={['#7f1d1d', '#0F172A']} style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <Text style={styles.emergencyTitle}>🚨 EMERGENCY ACTIVE</Text>
-          <Text style={styles.subtitle}>Sending alerts to contacts & authorities</Text>
+          <ShieldAlert size={64} color={COLORS.error} />
+          <Text style={styles.emergencyTitle}>EMERGENCY ACTIVE</Text>
+          <Text style={styles.subtitle}>Alerts sent to contacts & authorities</Text>
         </View>
 
-        <View style={styles.detailsCard}>
-          <Text style={styles.cardTitle}>Incident Details</Text>
+        <GlassCard style={styles.detailsCard}>
           <View style={styles.detailRow}>
-            <Text style={styles.label}>Event ID:</Text>
-            <Text style={styles.value}>{sosDetails?.sosEventId}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.label}>Tracking Token:</Text>
-            <Text style={styles.token}>{sosDetails?.trackToken}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.label}>Live Coords:</Text>
-            <Text style={styles.value}>
-              {coords ? `${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}` : 'Detecting...'}
+            <MapPin size={20} color={COLORS.textMuted} />
+            <Text style={styles.coordsText}>
+              {coords ? `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}` : 'Fetching location...'}
             </Text>
           </View>
-        </View>
+          <View style={styles.tokenRow}>
+            <Text style={styles.tokenLabel}>TRACKING TOKEN:</Text>
+            <Text style={styles.tokenValue}>{sosDetails?.trackToken}</Text>
+          </View>
+        </GlassCard>
 
-        <View style={[styles.escalationCard, isEscalated && styles.escalatedBg]}>
+        <View style={[styles.statusCard, isEscalated && styles.escalatedCard]}>
           {isEscalated ? (
-            <>
-              <Text style={styles.escalationTitle}>⚠️ ESCALATION ACTIVATED</Text>
-              <Text style={styles.escalationSub}>Authorities have been notified with your live location.</Text>
-            </>
+            <View style={styles.escalatedContent}>
+              <Text style={styles.statusTitle}>ESCALATED</Text>
+              <Text style={styles.statusSub}>Authorities are viewing your live feed.</Text>
+            </View>
           ) : (
-            <>
-              <Text style={styles.countdownLabel}>Alert escalation in:</Text>
-              <Text style={styles.countdownValue}>{countdown}s</Text>
-            </>
+            <View style={styles.countdownContent}>
+              <Text style={styles.countdownLabel}>ESCALATION IN</Text>
+              <Text style={styles.countdownValue}>{countdown}</Text>
+              <Text style={styles.countdownSecs}>SECONDS</Text>
+            </View>
           )}
         </View>
 
         <View style={styles.footer}>
-          <Button 
-            title="Share Live Location" 
-            onPress={() => Alert.alert('Location Shared', 'A live tracking link has been sent to your emergency contacts.')} 
-            color="#333"
-          />
-          <View style={{ height: 12 }} />
-          <Button 
-            title="Resolve SOS" 
-            onPress={handleResolve} 
-            color="#4CAF50"
+          <TouchableOpacity style={styles.shareButton}>
+            <Share2 size={20} color={COLORS.text} />
+            <Text style={styles.shareButtonText}>Share Live Link</Text>
+          </TouchableOpacity>
+          
+          <PrimaryButton 
+            title="Resolve Emergency" 
+            onPress={handleResolve}
+            style={styles.resolveButton}
           />
         </View>
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#ff4444' },
-  container: { flex: 1, padding: 20, backgroundColor: '#fff' },
-  centered: { justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 20, fontSize: 18, fontWeight: '600', color: '#ff4444' },
-  header: { alignItems: 'center', marginVertical: 30 },
-  emergencyTitle: { fontSize: 32, fontWeight: '900', color: '#ff4444', textAlign: 'center' },
-  subtitle: { fontSize: 16, color: '#666', marginTop: 8, textAlign: 'center' },
-  detailsCard: {
-    backgroundColor: '#f8f9fa',
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#eee',
-    marginBottom: 20
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  cardTitle: { fontSize: 18, fontWeight: '700', marginBottom: 15, color: '#333' },
-  detailRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  label: { color: '#666', fontWeight: '500' },
-  value: { fontWeight: '600', color: '#333' },
-  token: { fontWeight: 'bold', color: '#007AFF', letterSpacing: 1 },
-  escalationCard: {
-    backgroundColor: '#fff3cd',
-    padding: 25,
-    borderRadius: 16,
+  safeArea: {
+    flex: 1,
+    width: '100%',
+    padding: SPACING.lg,
+  },
+  loadingText: {
+    ...TYPOGRAPHY.body,
+    marginTop: 20,
+    color: COLORS.error,
+    fontWeight: 'bold',
+  },
+  header: {
+    alignItems: 'center',
+    marginTop: 40,
+    marginBottom: 30,
+  },
+  emergencyTitle: {
+    ...TYPOGRAPHY.h1,
+    color: COLORS.error,
+    marginTop: 15,
+    letterSpacing: 2,
+  },
+  subtitle: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginTop: 5,
+  },
+  detailsCard: {
+    padding: SPACING.md,
+    marginBottom: 20,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  coordsText: {
+    ...TYPOGRAPHY.body,
+    marginLeft: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  tokenRow: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    paddingTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  tokenLabel: {
+    ...TYPOGRAPHY.caption,
+    fontWeight: 'bold',
+  },
+  tokenValue: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.primary,
+    letterSpacing: 2,
+  },
+  statusCard: {
+    height: 200,
+    borderRadius: 100,
+    width: 200,
+    alignSelf: 'center',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  escalatedCard: {
+    borderColor: COLORS.error,
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+  },
+  countdownContent: {
+    alignItems: 'center',
+  },
+  countdownLabel: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.error,
+    fontWeight: 'bold',
+  },
+  countdownValue: {
+    fontSize: 64,
+    fontWeight: '900',
+    color: COLORS.error,
+  },
+  countdownSecs: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.error,
+  },
+  escalatedContent: {
+    alignItems: 'center',
+  },
+  statusTitle: {
+    ...TYPOGRAPHY.h2,
+    color: COLORS.error,
+  },
+  statusSub: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.text,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  footer: {
+    marginTop: 'auto',
+    marginBottom: 20,
+  },
+  shareButton: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#ffeeba'
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    height: 56,
+    borderRadius: 16,
+    marginBottom: 15,
   },
-  escalatedBg: { backgroundColor: '#f8d7da', borderColor: '#f5c6cb' },
-  countdownLabel: { fontSize: 16, color: '#856404', fontWeight: '600' },
-  countdownValue: { fontSize: 48, fontWeight: '900', color: '#856404' },
-  escalationTitle: { fontSize: 22, fontWeight: '900', color: '#721c24', marginBottom: 8 },
-  escalationSub: { fontSize: 14, color: '#721c24', textAlign: 'center', lineHeight: 20 },
-  footer: { marginTop: 'auto', paddingBottom: 20 }
+  shareButtonText: {
+    ...TYPOGRAPHY.h3,
+    marginLeft: 10,
+  },
+  resolveButton: {
+    backgroundColor: COLORS.accent,
+  }
 });
 
 export default SOSScreen;
