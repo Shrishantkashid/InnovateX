@@ -283,7 +283,7 @@ def test_heatmap_cluster():
 async def test_digest_generator():
     """Test 6: Weekly Digest Generator (Groq API)"""
     print("\n" + "="*60)
-    print("TEST 6: WEEKLY DIGEST GENERATOR (GPT-4o-mini)")
+    print("TEST 6: WEEKLY DIGEST GENERATOR (Groq Llama 3.1)")
     print("="*60)
 
     from digest_generator import DigestInput, generate_weekly_digest
@@ -306,7 +306,7 @@ async def test_digest_generator():
     )
 
     print(f"\n  Input: 14yo, risk=45/100, flags={input_data.top_flags}")
-    print("  Calling OpenAI API...")
+    print("  Calling Groq API...")
 
     result = await generate_weekly_digest(input_data)
     print(f"  Risk Category: {result.risk_category}")
@@ -321,13 +321,13 @@ async def test_digest_generator():
 async def test_conversation_coach():
     """Test 7: Conversation Coach"""
     print("\n" + "="*60)
-    print("TEST 7: CONVERSATION COACH (GPT-4o-mini)")
+    print("TEST 7: CONVERSATION COACH (Groq Llama 3.1)")
     print("="*60)
 
     from digest_generator import generate_conversation_coach
 
     print(f"\n  Input: 13yo, concern=grooming_pattern, risk=high")
-    print("  Calling OpenAI API...")
+    print("  Calling Groq API...")
 
     result = await generate_conversation_coach(
         child_age=13,
@@ -430,7 +430,7 @@ async def main():
         print(f"  ✗ FAILED: {e}")
         failed += 1
 
-    # Test 6: Digest Generator (OpenAI API)
+    # Test 6: Digest Generator (Groq API)
     try:
         await test_digest_generator()
         passed += 1
@@ -438,7 +438,7 @@ async def main():
         print(f"  ✗ FAILED: {e}")
         failed += 1
 
-    # Test 7: Conversation Coach (OpenAI API)
+    # Test 7: Conversation Coach (Groq API)
     try:
         await test_conversation_coach()
         passed += 1

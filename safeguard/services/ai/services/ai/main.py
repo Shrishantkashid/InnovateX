@@ -4,7 +4,7 @@ Exposes internal AI scoring endpoints consumed by the backend API (Dev 2).
 
 Endpoints:
     POST /ai/score          — Threat fusion scoring
-    POST /ai/route-risk     — Route risk assessment (GPT-4o-mini)
+    POST /ai/route-risk     — Route risk assessment (Groq Llama 3.1)
     POST /ai/grooming-score — Grooming pattern classification
     POST /ai/behaviour-delta— Behaviour anomaly detection
     GET  /ai/heatmap        — DBSCAN cluster results
@@ -20,7 +20,7 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from config import OPENAI_API_KEY
+from config import GROQ_API_KEY
 from threat_fusion import ThreatSignal, ThreatResult, compute_threat_score
 from route_risk import RouteRiskRequest, RouteRiskResponse, score_route_risk
 from grooming_classifier import GroomingInput, GroomingResult, score_grooming_risk
@@ -64,7 +64,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "safeguard-ai-engine",
-        "openai_configured": bool(OPENAI_API_KEY),
+        "groq_configured": bool(GROQ_API_KEY),
     }
 
 
@@ -100,7 +100,7 @@ async def score_threat(signal: ThreatSignal):
 @app.post("/ai/route-risk", response_model=RouteRiskResponse)
 async def assess_route_risk(request: RouteRiskRequest):
     """
-    Assess route safety using GPT-4o-mini + crime data + Google Places.
+    Assess route safety using Groq Llama 3.1 + crime data + Google Places.
 
     Returns risk score (1–5), reasoning, safer alternative, and nearby safe zones.
     Latency target: < 2 seconds.
@@ -198,7 +198,7 @@ async def generate_heatmap(request: HeatmapRequest):
 @app.post("/ai/digest", response_model=DigestResult)
 async def generate_digest(input_data: DigestInput):
     """
-    Generate weekly parent digest using GPT-4o-mini.
+    Generate weekly parent digest using Groq Llama 3.1.
 
     Produces plain-English narrative + conversation starter.
     Tone: supportive, not alarmist.

@@ -7,9 +7,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ---- OpenAI ----
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL = "gpt-4o-mini"
+# ---- Groq ----
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")
+GROQ_MODEL = "llama-3.1-8b-instant"
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
 # ---- Supabase ----
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")

@@ -9,15 +9,12 @@ from typing import Optional
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
-from config import GOOGLE_PLACES_API_KEY  # unused but keeps import structure
+from config import GROQ_API_KEY, GROQ_MODEL, GROQ_BASE_URL
 
-
-GROQ_API_KEY = "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"
-GROQ_MODEL = "llama-3.1-8b-instant"
 
 client = AsyncOpenAI(
     api_key=GROQ_API_KEY,
-    base_url="https://api.groq.com/openai/v1",
+    base_url=GROQ_BASE_URL,
 )
 
 
@@ -96,7 +93,7 @@ def _determine_risk_category(score: float) -> str:
 
 async def generate_weekly_digest(input_data: DigestInput) -> DigestResult:
     """
-    Generate a weekly digest narrative and conversation starter using GPT-4o-mini.
+    Generate a weekly digest narrative and conversation starter using Groq Llama 3.1.
 
     Runs: daily batch (cron) + immediately on critical flag.
     Tone: Supportive, not alarmist. Empowers parent, doesn't panic.

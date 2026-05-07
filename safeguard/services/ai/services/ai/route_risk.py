@@ -1,6 +1,6 @@
 """
 SafeGuard AI Engine — Route Risk Scorer
-Uses GPT-4o-mini to assess route safety based on destination, time, and crime data.
+Uses Groq (Llama 3.1) to assess route safety based on destination, time, and crime data.
 """
 
 import json
@@ -10,15 +10,12 @@ import httpx
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
-from config import GOOGLE_PLACES_API_KEY
+from config import GOOGLE_PLACES_API_KEY, GROQ_API_KEY, GROQ_MODEL, GROQ_BASE_URL
 
-
-GROQ_API_KEY = "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"
-GROQ_MODEL = "llama-3.1-8b-instant"
 
 client = AsyncOpenAI(
     api_key=GROQ_API_KEY,
-    base_url="https://api.groq.com/openai/v1",
+    base_url=GROQ_BASE_URL,
 )
 
 
@@ -113,7 +110,7 @@ async def _fetch_nearby_safe_zones(lat: float, lng: float) -> list[SafeZone]:
 
 async def score_route_risk(request: RouteRiskRequest) -> RouteRiskResponse:
     """
-    Score route risk using GPT-4o-mini.
+    Score route risk using Groq Llama 3.1.
 
     Combines destination coordinates, time of day, day of week,
     NCRB crime context, and nearby safe zones into a risk assessment.
