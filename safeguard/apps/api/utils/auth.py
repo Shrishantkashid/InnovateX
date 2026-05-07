@@ -1,54 +1,55 @@
-from datetime import datetime, timedelta
-from typing import Optional, Any
-from jose import JWTError, jwt
-from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from ..config import settings
+from ..database import get_supabase
 from ..models.user import TokenData
+import logging
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+logger = logging.getLogger(__name__)
+
+# OAuth2 scheme for token extraction
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
-
-def get_password_hash(password):
-    return pwd_context.hash(password)
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
-    return encoded_jwt
-
 async def get_current_user(token: str = Depends(oauth2_scheme)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    """
+    Verifies the Supabase JWT token and returns the user data.
+    """
+    supabase = get_supabase()
+    
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-        email: str = payload.get("sub")
-        role: str = payload.get("role")
-        if email is None:
-            raise credentials_exception
-        token_data = TokenData(email=email, role=role)
-    except JWTError:
-        raise credentials_exception
-    return token_data
+        # Supabase auth.get_user(jwt) verifies the token and returns user details
+        user_response = supabase.auth.get_user(token)
+        
+        if not user_response or not user_response.user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired session",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        user = user_response.user
+        # Extract role from user metadata (Supabase stores this in raw_user_meta_data)
+        role = user.user_metadata.get("role")
+        email = user.email
+        
+        return TokenData(email=email, role=role, sub=str(user.id))
+        
+    except Exception as e:
+        logger.error(f"Auth verification failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-def check_role(required_roles: list):
-    async def role_checker(current_user: TokenData = Depends(get_current_user)):
-        if current_user.role not in required_roles:
+def require_role(allowed_roles: list):
+    """
+    Dependency to check if the current user has one of the allowed roles.
+    """
+    async def role_dependency(current_user: TokenData = Depends(get_current_user)):
+        if current_user.role not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have enough permissions to access this resource"
+                detail=f"Role '{current_user.role}' is not authorized to access this resource"
             )
         return current_user
-    return role_checker
+    return role_dependency

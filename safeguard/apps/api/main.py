@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import sos, threat, module3, auth, admin
+from .routers import sos, threat, module3, auth, admin, onboarding, profiles
 
 app = FastAPI(
     title="SafeGuard API",
@@ -19,6 +19,8 @@ app.add_middleware(
 
 # Register Routers
 app.include_router(auth.router)
+app.include_router(onboarding.router)
+app.include_router(profiles.router)
 app.include_router(sos.router)
 app.include_router(threat.router)
 app.include_router(module3.router)

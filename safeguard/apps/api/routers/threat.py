@@ -1,13 +1,17 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from ..models.threat import ThreatSignal, ThreatResponse, RiskResponse
 from ..services.threat_engine import threat_engine
 from ..database import get_supabase
-from uuid import uuid4
+from ..utils.auth import get_current_user
+from ..models.user import TokenData
 
 router = APIRouter(prefix="/api", tags=["Threat & AI"])
 
 @router.post("/threat", response_model=ThreatResponse)
-async def process_threat_signal(signal: ThreatSignal):
+async def process_threat_signal(
+    signal: ThreatSignal,
+    current_user: TokenData = Depends(get_current_user)
+):
     # Prepare signals for the engine
     signals = [{"type": signal.signal_type, "value": signal.confidence}]
     
@@ -25,7 +29,11 @@ async def process_threat_signal(signal: ThreatSignal):
     )
 
 @router.get("/risk", response_model=RiskResponse)
-async def get_route_risk(destination: str, time: str, user_id: str):
+async def get_route_risk(
+    destination: str, 
+    time: str, 
+    current_user: TokenData = Depends(get_current_user)
+):
     # GPT-4o-mini logic would go here
     # Placeholder response
     return RiskResponse(

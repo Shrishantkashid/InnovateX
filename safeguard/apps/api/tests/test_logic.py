@@ -47,8 +47,29 @@ def test_time_weight():
     else:
         assert score_no_signals == 0
 
+def test_aadhaar_logic():
+    print("\nTesting Aadhaar Service Logic...")
+    from services.aadhaar_service import AadhaarService
+    from unittest.mock import AsyncMock, patch
+    
+    service = AadhaarService()
+    
+    # Mock authentication
+    service._get_access_token = AsyncMock(return_value="mock_token")
+    
+    # Mock sending OTP
+    with patch('httpx.AsyncClient.post') as mock_post:
+        mock_post.return_value.json = lambda: {"status": "success", "data": {"reference_id": "ref123"}}
+        mock_post.return_value.status_code = 200
+        
+        import asyncio
+        result = asyncio.run(service.send_otp("123456789012"))
+        print(f"OTP Send Result: {result}")
+        assert result["data"]["reference_id"] == "ref123"
+
 if __name__ == "__main__":
     test_m1_threat_logic()
     test_m2_threat_logic()
     test_time_weight()
+    test_aadhaar_logic()
     print("\nAll unit tests passed!")

@@ -3,7 +3,7 @@ from typing import Optional
 from uuid import UUID
 
 class ThreatSignal(BaseModel):
-    user_id: UUID
+    user_id: Optional[UUID] = None
     module: str # 'm1'|'m2'
     signal_type: str # 'audio'|'motion'|'eta'|'zone_exit'
     confidence: float
@@ -18,7 +18,7 @@ class ThreatResponse(BaseModel):
 class RiskQuery(BaseModel):
     destination: str # "lat,lng"
     time: str # "HH:MM"
-    user_id: UUID
+    user_id: Optional[UUID] = None
 
 class RiskResponse(BaseModel):
     risk_score: int

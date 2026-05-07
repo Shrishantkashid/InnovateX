@@ -11,3 +11,4 @@ twilio
 httpx
 slowapi
 supabase
+pydantic-settings

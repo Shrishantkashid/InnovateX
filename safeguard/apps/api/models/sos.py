@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 class SOSBase(BaseModel):
-    user_id: UUID
+    user_id: Optional[UUID] = None
     lat: float
     lng: float
     trigger_type: str  # 'audio'|'motion'|'eta'|'squeeze'|'manual'|'zone_exit'
@@ -21,7 +21,7 @@ class SOSResponse(BaseModel):
     notifications_queued: int
 
 class LocationPing(BaseModel):
-    user_id: UUID
+    user_id: Optional[UUID] = None
     sos_event_id: UUID
     lat: float
     lng: float

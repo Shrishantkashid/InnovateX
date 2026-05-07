@@ -1,72 +1,107 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from ..models.user import UserCreate, UserResponse, Token
-from ..utils.auth import get_password_hash, verify_password, create_access_token
 from ..database import get_supabase
-from datetime import timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 @router.post("/register", response_model=UserResponse)
-async def register_user(user: UserCreate):
+async def register_user(user_data: UserCreate):
     supabase = get_supabase()
     
-    # 1. Check if user already exists
-    existing_user = supabase.table("users").select("*").eq("email", user.email).execute()
-    if existing_user.data:
+    # 1. Sign up with Supabase Auth
+    # We pass role and module in user_metadata so they are available in the JWT
+    try:
+        auth_response = supabase.auth.sign_up({
+            "email": user_data.email,
+            "password": user_data.password,
+            "options": {
+                "data": {
+                    "full_name": user_data.full_name,
+                    "role": user_data.role,
+                    "module": user_data.module,
+                    "phone": user_data.phone
+                }
+            }
+        })
+        
+        if not auth_response.user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Registration failed"
+            )
+        
+        user = auth_response.user
+        
+        # Note: Profiles table is usually populated by a database trigger 
+        # (handle_new_user in schema.sql). 
+        # If the trigger isn't set up yet, we could do it manually here.
+        
+        return {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user_data.full_name,
+            "phone": user_data.phone,
+            "role": user_data.role,
+            "module": user_data.module,
+            "is_verified": False,
+            "created_at": user.created_at
+        }
+        
+    except Exception as e:
+        logger.error(f"Registration error: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            detail=str(e)
         )
-    
-    # 2. Hash password and save to database
-    # In a real setup, you might use Supabase Auth's signup method, 
-    # but here we follow the PRD's schema-first approach.
-    hashed_password = get_password_hash(user.password)
-    
-    user_data = {
-        "email": user.email,
-        "full_name": user.full_name,
-        "phone": user.phone,
-        "role": user.role,
-        "module": user.module,
-        "password_hash": hashed_password # Note: Ensure your schema has this column
-    }
-    
-    result = supabase.table("users").insert(user_data).execute()
-    
-    if not result.data:
-        raise HTTPException(status_code=500, detail="Failed to create user")
-        
-    return result.data[0]
 
 @router.post("/login", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     supabase = get_supabase()
     
-    # 1. Fetch user by email (sub)
-    user_result = supabase.table("users").select("*").eq("email", form_data.username).execute()
-    
-    if not user_result.data:
+    try:
+        # Sign in with Supabase Auth
+        auth_response = supabase.auth.sign_in_with_password({
+            "email": form_data.username,
+            "password": form_data.password
+        })
+        
+        if not auth_response.session:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password"
+            )
+        
+        session = auth_response.session
+        user = auth_response.user
+        
+        return {
+            "access_token": session.access_token,
+            "token_type": "bearer",
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "full_name": user.user_metadata.get("full_name"),
+                "phone": user.user_metadata.get("phone"),
+                "role": user.user_metadata.get("role"),
+                "module": user.user_metadata.get("module"),
+                "is_verified": user.user_metadata.get("is_verified", False),
+                "created_at": user.created_at
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Login error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="Incorrect email or password"
         )
-    
-    user = user_result.data[0]
-    
-    # 2. Verify password
-    if not verify_password(form_data.password, user.get("password_hash")):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    # 3. Create JWT
-    access_token = create_access_token(
-        data={"sub": user["email"], "role": user["role"]}
-    )
-    
-    return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post("/logout")
+async def logout():
+    supabase = get_supabase()
+    supabase.auth.sign_out()
+    return {"message": "Successfully logged out"}

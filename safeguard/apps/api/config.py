@@ -3,9 +3,15 @@ from typing import Optional
 
 class Settings(BaseSettings):
     # SUPABASE
-    SUPABASE_URL: str = "https://xxxx.supabase.co"
+    SUPABASE_URL: str = "https://fffrstfabeacsmevpqjn.supabase.co"
     SUPABASE_ANON_KEY: str = "your-anon-key"
     SUPABASE_SERVICE_KEY: Optional[str] = None
+    DATABASE_URL: str = "postgresql://postgres:KlEcBRl3Ny82zDtS@db.fffrstfabeacsmevpqjn.supabase.co:5432/postgres"
+
+    # SANDBOX API (Aadhaar)
+    SANDBOX_API_KEY: str = "key_live_eff84033520944e68f3008326c46613f"
+    SANDBOX_API_SECRET: str = "secret_live_4219889eeced474f95523315ce353179"
+    SANDBOX_BASE_URL: str = "https://api.sandbox.co.in"
 
     # TWILIO
     TWILIO_ACCOUNT_SID: Optional[str] = None

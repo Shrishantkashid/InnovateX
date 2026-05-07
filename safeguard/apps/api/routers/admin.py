@@ -1,16 +1,15 @@
 from fastapi import APIRouter, Depends, Query
 from ..models.user import TokenData
-from ..utils.auth import check_role
 from ..database import get_supabase
 from typing import Optional, List
-from datetime import datetime
+from ..utils.auth import require_role
 
 router = APIRouter(prefix="/api/admin", tags=["Admin & Authority"])
 
 @router.get("/incidents")
 async def get_all_incidents(
     resolved: Optional[bool] = Query(None),
-    current_user: TokenData = Depends(check_role(["admin"]))
+    current_user: TokenData = Depends(require_role(["admin"]))
 ):
     supabase = get_supabase()
     query = supabase.table("sos_events").select("*, users(full_name)")
