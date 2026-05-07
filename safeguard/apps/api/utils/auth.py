@@ -1,7 +1,8 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from ..database import get_supabase
-from ..models.user import TokenData
+from database import get_supabase
+from models.user import TokenData
+from config import settings
 import logging
 
 logger = logging.getLogger(__name__)

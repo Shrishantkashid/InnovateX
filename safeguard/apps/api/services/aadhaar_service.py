@@ -1,6 +1,6 @@
 import httpx
 from typing import Dict, Any, Optional
-from ..config import settings
+from config import settings
 import logging
 
 logger = logging.getLogger(__name__)

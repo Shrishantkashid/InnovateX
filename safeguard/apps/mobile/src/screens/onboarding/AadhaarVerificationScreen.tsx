@@ -28,7 +28,8 @@ const AadhaarVerificationScreen = ({ navigation, route }: any) => {
       if (response.success) {
         navigation.navigate('OtpVerification', { 
           signupData, 
-          aadhaarNumber 
+          aadhaarNumber,
+          referenceId: response.referenceId
         });
       } else {
         setError(response.message || 'Verification failed');

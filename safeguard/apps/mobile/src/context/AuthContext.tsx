@@ -16,7 +16,7 @@ interface AuthContextType {
   role: UserRole;
   isAuthenticated: boolean;
   isLoading: boolean;
-  signIn: (userData: User) => Promise<void>;
+  signIn: (userData: User, token?: string) => Promise<void>;
   signOut: () => Promise<void>;
   setRole: (role: UserRole) => void;
 }
@@ -46,11 +46,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadSession();
   }, []);
 
-  const signIn = async (userData: User) => {
+  const signIn = async (userData: User, token?: string) => {
     setUser(userData);
     setRoleState(userData.role);
     await AsyncStorage.setItem('@user_session', JSON.stringify(userData));
     await AsyncStorage.setItem('@user_role', userData.role || '');
+    if (token) await AsyncStorage.setItem('@auth_token', token);
   };
 
   const signOut = async () => {
@@ -58,6 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setRoleState(null);
     await AsyncStorage.removeItem('@user_session');
     await AsyncStorage.removeItem('@user_role');
+    await AsyncStorage.removeItem('@auth_token');
   };
 
   const setRole = (newRole: UserRole) => {

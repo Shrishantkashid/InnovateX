@@ -1,18 +1,25 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
-from datetime import datetime
+from pydantic import BaseModel
+from typing import Optional
 from uuid import UUID
 
 class SOSBase(BaseModel):
     user_id: Optional[UUID] = None
-    lat: float
-    lng: float
-    trigger_type: str  # 'audio'|'motion'|'eta'|'squeeze'|'manual'|'zone_exit'
-    threat_score: int
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    risk_level: str = "HIGH"
+    trigger_type: str = "manual"  # 'audio'|'motion'|'eta'|'squeeze'|'manual'|'zone_exit'
+    threat_score: int = 90
     audio_clip_b64: Optional[str] = None
 
 class SOSCreate(SOSBase):
     pass
+
+class SOSCreateRequest(BaseModel):
+    latitude: float
+    longitude: float
+    risk_level: str = "HIGH"
 
 class SOSResponse(BaseModel):
     sos_event_id: UUID
@@ -28,5 +35,6 @@ class LocationPing(BaseModel):
     accuracy: Optional[float] = None
 
 class SOSResolve(BaseModel):
-    resolved_by: str # 'user'|'admin'
-    notes: Optional[str] = None
+    sos_id: UUID
+    resolution_notes: Optional[str] = None
+    resolved_by: str = "user" # 'user'|'admin'

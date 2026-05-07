@@ -12,3 +12,5 @@ httpx
 slowapi
 supabase
 pydantic-settings
+requests
+email-validator

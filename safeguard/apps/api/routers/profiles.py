@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from ..models.user import UserResponse, TokenData, ProfileUpdate
-from ..utils.auth import get_current_user
-from ..database import get_supabase
+from models.user import UserResponse, TokenData, ProfileUpdate
+from utils.auth import get_current_user
+from database import get_supabase
 import logging
 
 logger = logging.getLogger(__name__)

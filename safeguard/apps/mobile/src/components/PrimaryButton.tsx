@@ -6,7 +6,8 @@ import {
   ActivityIndicator, 
   Animated, 
   ViewStyle, 
-  TextStyle 
+  TextStyle,
+  View
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SPACING, TYPOGRAPHY } from '../theme';

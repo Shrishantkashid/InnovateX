@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends
-from ..models.module3 import BehaviourLog, ContactScore, DigestRequest, DigestResponse
-from ..database import get_supabase
-from ..utils.auth import get_current_user, require_role
-from ..models.user import TokenData
+from models.module3 import BehaviourLog, ContactScore, DigestRequest, DigestResponse
+from database import get_supabase
+from utils.auth import get_current_user, require_role
+from models.user import TokenData
 from uuid import uuid4
 
 router = APIRouter(prefix="/api", tags=["Module 3 - Digital Safety"])

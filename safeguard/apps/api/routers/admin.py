@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, Query
-from ..models.user import TokenData
-from ..database import get_supabase
-from typing import Optional, List
-from ..utils.auth import require_role
+from models.user import TokenData
+from database import get_supabase
+from typing import Optional
+from utils.auth import require_role
 
 router = APIRouter(prefix="/api/admin", tags=["Admin & Authority"])
 
@@ -12,7 +12,7 @@ async def get_all_incidents(
     current_user: TokenData = Depends(require_role(["admin"]))
 ):
     supabase = get_supabase()
-    query = supabase.table("sos_events").select("*, users(full_name)")
+    query = supabase.table("sos_events").select("*, profiles(full_name)")
     
     if resolved is not None:
         query = query.eq("resolved", resolved)
@@ -22,7 +22,7 @@ async def get_all_incidents(
 
 @router.get("/heatmap")
 async def get_threat_heatmap(
-    current_user: TokenData = Depends(check_role(["admin"]))
+    current_user: TokenData = Depends(require_role(["admin"]))
 ):
     supabase = get_supabase()
     

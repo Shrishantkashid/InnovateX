@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from ..models.user import TokenData, AadhaarOTPRequest, AadhaarVerifyRequest
-from ..utils.auth import get_current_user, require_role
-from ..services.aadhaar_service import aadhaar_service
-from ..database import get_supabase
+from models.user import TokenData, AadhaarOTPRequest, AadhaarVerifyRequest
+from utils.auth import get_current_user, require_role
+from services.aadhaar_service import aadhaar_service
+from database import get_supabase
 import random
 import string
 import logging

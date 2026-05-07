@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SPACING, TYPOGRAPHY } from '../../theme';
 import FormInput from '../../components/FormInput';
@@ -42,20 +42,17 @@ const SignupScreen = ({ navigation }: any) => {
     if (!validate()) return;
 
     if (role === 'woman') {
-      // Navigate to Aadhaar Flow for women
       navigation.navigate('AadhaarVerification', { signupData: formData });
     } else {
       setIsLoading(true);
       try {
         const response = await authService.signup({ ...formData, role });
         if (response.success) {
-          await signIn(response.user as any);
-          // The navigator will automatically switch to the main stack if using isAuthenticated
-          // But for now we just navigate to Home
+          await signIn(response.user as any, response.token);
           navigation.navigate('Home');
         }
-      } catch (error) {
-        Alert.alert('Signup Failed', 'An error occurred during registration.');
+      } catch (error: any) {
+        Alert.alert('Signup Failed', error.message || 'An error occurred during registration.');
       } finally {
         setIsLoading(false);
       }
@@ -144,6 +141,16 @@ const SignupScreen = ({ navigation }: any) => {
               onPress={handleSignup}
               isLoading={isLoading}
             />
+            
+            <TouchableOpacity 
+              onPress={() => navigation.navigate('Login')}
+              style={styles.loginLink}
+            >
+              <Text style={styles.footerText}>
+                Already have an account? <Text style={styles.linkText}>Log In</Text>
+              </Text>
+            </TouchableOpacity>
+
             <Text style={styles.disclaimer}>
               By signing up, you agree to our Terms of Service and Privacy Policy.
             </Text>
@@ -186,6 +193,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 16,
     lineHeight: 18,
+    color: COLORS.textMuted,
+  },
+  loginLink: {
+    marginTop: 20,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  footerText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textMuted,
+  },
+  linkText: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
   },
 });
 

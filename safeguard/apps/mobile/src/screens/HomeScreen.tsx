@@ -1,17 +1,20 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SPACING, TYPOGRAPHY } from '../theme';
+import { COLORS, GRADIENTS, SPACING, TYPOGRAPHY, SHADOWS } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import GlassCard from '../components/GlassCard';
+import GlowingButton from '../components/GlowingButton';
 import { 
   ShieldAlert, 
+  ShieldCheck, 
   MapPin, 
-  Settings, 
-  LogOut, 
+  Navigation, 
+  Users, 
+  Bell, 
   User as UserIcon,
-  Bell,
-  Navigation
+  ChevronRight,
+  Settings
 } from 'lucide-react-native';
 
 const HomeScreen = ({ navigation }: any) => {
@@ -24,92 +27,91 @@ const HomeScreen = ({ navigation }: any) => {
     ]);
   };
 
-  const ActionButton = ({ title, icon: Icon, onPress, color }: any) => (
-    <TouchableOpacity onPress={onPress} style={styles.actionButtonWrapper}>
-      <GlassCard style={styles.actionCard}>
-        <View style={[styles.actionIconContainer, { backgroundColor: `${color}20` }]}>
-          <Icon size={24} color={color} />
-        </View>
-        <Text style={styles.actionTitle}>{title}</Text>
-      </GlassCard>
-    </TouchableOpacity>
-  );
-
   return (
     <LinearGradient colors={GRADIENTS.dark} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Header Section */}
+        {/* Cinematic Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Welcome back,</Text>
-            <Text style={styles.userName}>{user?.name || 'User'}</Text>
+            <Text style={styles.greeting}>Command Center</Text>
+            <Text style={styles.username}>{user?.name || 'SafeGuard User'}</Text>
           </View>
-          <TouchableOpacity onPress={handleLogout} style={styles.profileIcon}>
-            <LogOut color={COLORS.textMuted} size={24} />
+          <TouchableOpacity style={[styles.profileBtn, SHADOWS.glow]}>
+            <UserIcon size={24} color={COLORS.text} />
           </TouchableOpacity>
         </View>
 
-        {/* Role ID Card */}
-        <GlassCard style={styles.idCard}>
-          <View style={styles.idRow}>
+        {/* Realtime Safety Score Card */}
+        <GlassCard style={styles.scoreCard}>
+          <View style={styles.scoreHeader}>
+            <ShieldCheck size={20} color={COLORS.accent} />
+            <Text style={styles.scoreTitle}>SYSTEM STATUS: SECURE</Text>
+          </View>
+          <View style={styles.scoreContent}>
             <View>
-              <Text style={styles.roleLabel}>{user?.role?.toUpperCase()} ACCOUNT</Text>
-              <Text style={styles.uniqueId}>{user?.uniqueId || 'VERIFIED IDENTITY'}</Text>
+              <Text style={styles.scoreLabel}>Safety Score</Text>
+              <Text style={styles.scoreValue}>98.4</Text>
             </View>
-            <View style={styles.statusBadge}>
-              <View style={styles.statusDot} />
-              <Text style={styles.statusText}>Active</Text>
+            <View style={styles.scoreBadge}>
+              <Text style={styles.scoreBadgeText}>OPTIMAL</Text>
             </View>
           </View>
         </GlassCard>
 
         {/* Main Actions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Emergency Actions</Text>
+          <Text style={styles.sectionTitle}>ACTIVE DEPLOYMENT</Text>
           <View style={styles.actionGrid}>
-            <ActionButton 
-              title="Trigger SOS" 
-              icon={ShieldAlert} 
+            <GlowingButton 
+              title="EMERGENCY SOS" 
+              variant="danger"
+              icon={<ShieldAlert size={20} color="white" />}
               onPress={() => navigation.navigate('SOS')}
-              color={COLORS.error}
-            />
-            <ActionButton 
-              title="Safe Journey" 
-              icon={Navigation} 
-              onPress={() => navigation.navigate('Journey')}
-              color={COLORS.primary}
+              style={styles.sosBtn}
             />
           </View>
-        </View>
-
-        {/* secondary Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Safety Tools</Text>
-          <View style={styles.actionGrid}>
-            <ActionButton 
-              title="Live Tracking" 
-              icon={MapPin} 
+          <View style={styles.secondaryActions}>
+            <TouchableOpacity 
+              style={styles.actionItem} 
               onPress={() => navigation.navigate('Tracking')}
-              color={COLORS.secondary}
-            />
-            <ActionButton 
-              title="Alert History" 
-              icon={Bell} 
-              onPress={() => Alert.alert('History', 'No recent alerts found.')}
-              color={COLORS.accent}
-            />
+            >
+              <GlassCard style={styles.actionCard}>
+                <MapPin size={24} color={COLORS.primary} />
+                <Text style={styles.actionLabel}>Live Tracking</Text>
+              </GlassCard>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.actionItem}
+              onPress={() => navigation.navigate('Journey')}
+            >
+              <GlassCard style={styles.actionCard}>
+                <Navigation size={24} color={COLORS.secondary} />
+                <Text style={styles.actionLabel}>Safe Journey</Text>
+              </GlassCard>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Quick Settings */}
-        <TouchableOpacity style={styles.settingsItem}>
-          <GlassCard style={styles.settingsCard}>
-            <View style={styles.settingsRow}>
-              <View style={styles.settingsIconContainer}>
-                <Settings size={20} color={COLORS.text} />
-              </View>
-              <Text style={styles.settingsText}>Account & Security Settings</Text>
+        {/* Parent Portal */}
+        {user?.role === 'parent' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>GUARDIAN PROTOCOL</Text>
+            <GlowingButton 
+              title="OPEN GUARDIAN DASHBOARD" 
+              variant="secondary"
+              icon={<Users size={20} color="white" />}
+              onPress={() => navigation.navigate('GuardianDashboard')}
+            />
+          </View>
+        )}
+
+        <TouchableOpacity onPress={handleLogout}>
+          <GlassCard style={styles.intelCard}>
+            <View style={styles.intelHeader}>
+              <Settings size={20} color={COLORS.textMuted} />
+              <Text style={styles.intelTitle}>Account & Security Settings</Text>
             </View>
+            <ChevronRight size={20} color={COLORS.textMuted} />
           </GlassCard>
         </TouchableOpacity>
       </ScrollView>
@@ -132,13 +134,14 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   greeting: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.textMuted,
+    ...TYPOGRAPHY.caption,
+    textTransform: 'uppercase',
   },
-  userName: {
-    ...TYPOGRAPHY.h1,
+  username: {
+    ...TYPOGRAPHY.h2,
+    marginTop: 4,
   },
-  profileIcon: {
+  profileBtn: {
     width: 48,
     height: 48,
     borderRadius: 24,
@@ -148,97 +151,95 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  idCard: {
+  scoreCard: {
+    padding: SPACING.md,
     marginBottom: 30,
-    padding: SPACING.lg,
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+    borderColor: 'rgba(16, 185, 129, 0.2)',
   },
-  idRow: {
+  scoreHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  scoreTitle: {
+    ...TYPOGRAPHY.dashboard,
+    color: COLORS.accent,
+    marginLeft: 10,
+  },
+  scoreContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-end',
   },
-  roleLabel: {
+  scoreLabel: {
     ...TYPOGRAPHY.caption,
-    letterSpacing: 1,
-    color: COLORS.primary,
-    fontWeight: 'bold',
+    marginBottom: 4,
   },
-  uniqueId: {
-    ...TYPOGRAPHY.h2,
-    marginTop: 4,
+  scoreValue: {
+    ...TYPOGRAPHY.h1,
+    fontSize: 42,
+    lineHeight: 42,
   },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  scoreBadge: {
     backgroundColor: COLORS.accent,
-    marginRight: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
-  statusText: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.accent,
-    fontWeight: 'bold',
+  scoreBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: 'white',
   },
   section: {
     marginBottom: 30,
   },
   sectionTitle: {
-    ...TYPOGRAPHY.h3,
-    marginBottom: 16,
-    marginLeft: 4,
+    ...TYPOGRAPHY.dashboard,
+    marginBottom: 15,
   },
   actionGrid: {
+    marginBottom: 15,
+  },
+  sosBtn: {
+    width: '100%',
+  },
+  secondaryActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  actionButtonWrapper: {
+  actionItem: {
     width: '48%',
   },
   actionCard: {
+    padding: SPACING.md,
     alignItems: 'center',
-    paddingVertical: SPACING.lg,
-  },
-  actionIconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 15,
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
+    height: 100,
   },
-  actionTitle: {
-    ...TYPOGRAPHY.body,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  settingsItem: {
+  actionLabel: {
+    ...TYPOGRAPHY.caption,
     marginTop: 10,
-    marginBottom: 40,
+    fontWeight: '700',
+    color: COLORS.text,
   },
-  settingsCard: {
+  intelCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     padding: SPACING.md,
   },
-  settingsRow: {
+  intelHeader: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  settingsIconContainer: {
-    marginRight: 15,
-  },
-  settingsText: {
+  intelTitle: {
     ...TYPOGRAPHY.body,
-    fontSize: 15,
-  },
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 12,
+  }
 });
 
 export default HomeScreen;

@@ -9,7 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { KeyRound } from 'lucide-react-native';
 
 const OtpVerificationScreen = ({ navigation, route }: any) => {
-  const { signupData, aadhaarNumber } = route.params;
+  const { signupData, aadhaarNumber, referenceId } = route.params;
   const { signIn } = useAuth();
   const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -25,12 +25,12 @@ const OtpVerificationScreen = ({ navigation, route }: any) => {
     setError(null);
 
     try {
-      const response = await authService.verifyOtp(otp);
+      const response = await authService.verifyOtp(otp, referenceId);
       if (response.success) {
         // Complete the signup process
         const signupResponse = await authService.signup({ ...signupData, role: 'woman' });
         if (signupResponse.success) {
-          await signIn(signupResponse.user as any);
+          await signIn(signupResponse.user as any, signupResponse.token);
           navigation.navigate('Home');
         }
       } else {
