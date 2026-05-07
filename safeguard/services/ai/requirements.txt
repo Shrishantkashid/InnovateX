@@ -1,0 +1,10 @@
+tensorflow
+tensorflow-hub
+scikit-learn
+sentence-transformers
+openai
+scipy
+apscheduler
+python-dotenv
+httpx
+pydantic
