@@ -47,6 +47,9 @@ export const authService = {
       };
     } catch (error: any) {
       console.error('Signup Error:', error);
+      if (error?.message?.includes('Network request failed')) {
+        throw new Error(`Network request failed. Verify API URL (${CONFIG.AUTH_ENDPOINTS.SIGNUP}) and that backend is reachable from this device.`);
+      }
       throw error;
     }
   },
