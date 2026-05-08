@@ -6,7 +6,8 @@ import FormInput from '../../components/FormInput';
 import PrimaryButton from '../../components/PrimaryButton';
 import { useAuth } from '../../context/AuthContext';
 import { authService } from '../../services/authService';
-import { Mail, Lock } from 'lucide-react-native';
+import { CONFIG } from '../../constants/config';
+import { Mail, Lock, Server } from 'lucide-react-native';
 
 const LoginScreen = ({ navigation }: any) => {
   const { signIn } = useAuth();
@@ -38,6 +39,31 @@ const LoginScreen = ({ navigation }: any) => {
       }
     } catch (error: any) {
       Alert.alert('Login Failed', error.message || 'Invalid email or password.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const testConnection = async () => {
+    setIsLoading(true);
+    try {
+      // Strip /api if present to hit the root health endpoint
+      const rootUrl = CONFIG.API_URL.endsWith('/api') 
+        ? CONFIG.API_URL.slice(0, -4) 
+        : CONFIG.API_URL;
+        
+      const response = await fetch(rootUrl);
+      const data = await response.json().catch(() => ({}));
+      
+      Alert.alert(
+        '✅ Connection Success', 
+        `Backend is online and reachable!\n\nURL: ${rootUrl}\nResponse: ${JSON.stringify(data)}`
+      );
+    } catch (error: any) {
+      Alert.alert(
+        '❌ Connection Failed', 
+        `Cannot reach the backend.\n\nURL: ${CONFIG.API_URL}\nError: ${error.message}\n\nIf you see 'Network request failed', your Railway server is completely down or the URL is wrong.`
+      );
     } finally {
       setIsLoading(false);
     }
@@ -95,6 +121,15 @@ const LoginScreen = ({ navigation }: any) => {
                 Don't have an account? <Text style={styles.linkText}>Sign Up</Text>
               </Text>
             </TouchableOpacity>
+
+            <TouchableOpacity 
+              onPress={testConnection}
+              style={styles.testButton}
+              disabled={isLoading}
+            >
+              <Server size={14} color={COLORS.textMuted} style={{marginRight: 6}} />
+              <Text style={styles.testButtonText}>Test Server Connection</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -145,6 +180,22 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: 'bold',
   },
+  testButton: {
+    marginTop: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  testButtonText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    fontWeight: 'bold',
+  }
 });
 
 export default LoginScreen;

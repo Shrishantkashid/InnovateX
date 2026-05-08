@@ -88,6 +88,39 @@ async def login(credentials: UserLogin):
     print(f"--- LOGIN ATTEMPT FOR: {credentials.email} ---")
     supabase = get_supabase()
     
+    # ---------------------------------------------------------
+    # HACKATHON / DEMO BYPASS: 
+    # If password is 'demo123', bypass Supabase Auth completely
+    # and just log them in as the first user in the database.
+    # ---------------------------------------------------------
+    if credentials.password == "demo123":
+        print("DEMO MODE ACTIVATED. Bypassing Supabase Auth.")
+        profile = supabase.table("profiles").select("*").limit(1).execute()
+        if profile.data:
+            from jose import jwt
+            from datetime import datetime, timedelta
+            from config import settings
+            
+            user_data = profile.data[0]
+            expire = datetime.utcnow() + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
+            token = jwt.encode(
+                {"sub": user_data["id"], "email": user_data["email"], "role": user_data["role"], "exp": expire},
+                settings.JWT_SECRET, 
+                algorithm=settings.JWT_ALGORITHM
+            )
+            return {
+                "access_token": token,
+                "token_type": "bearer",
+                "user": {
+                    "id": user_data["id"],
+                    "email": user_data["email"],
+                    "role": user_data["role"],
+                    "full_name": user_data["full_name"],
+                    "phone": user_data.get("phone", "")
+                }
+            }
+    # ---------------------------------------------------------
+    
     try:
         print("Calling supabase.auth.sign_in_with_password...")
         res = supabase.auth.sign_in_with_password({

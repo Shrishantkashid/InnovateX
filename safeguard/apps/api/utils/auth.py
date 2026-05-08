@@ -17,6 +17,18 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     supabase = get_supabase()
     
     try:
+        # ---------------------------------------------------------
+        # HACKATHON / DEMO BYPASS:
+        # Check if this is a local JWT first before asking Supabase
+        # ---------------------------------------------------------
+        from jose import jwt, JWTError
+        try:
+            payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+            if "email" in payload and "sub" in payload:
+                return TokenData(email=payload["email"], role=payload["role"], sub=payload["sub"])
+        except JWTError:
+            pass # Not a local token, fallback to Supabase
+            
         # Supabase auth.get_user(jwt) verifies the token and returns user details
         user_response = supabase.auth.get_user(token)
         
