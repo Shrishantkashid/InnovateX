@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from models.user import UserResponse, TokenData, ProfileUpdate
 from utils.auth import get_current_user
-from database import get_supabase
+from database import get_db
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,18 +13,18 @@ async def get_my_profile(current_user: TokenData = Depends(get_current_user)):
     """
     Retrieve the profile of the currently authenticated user.
     """
-    supabase = get_supabase()
+    db = get_db()
     
     try:
-        result = supabase.table("profiles").select("*").eq("id", current_user.sub).execute()
+        user_profile = await db.profiles.find_one({"_id": current_user.sub})
         
-        if not result.data:
+        if not user_profile:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Profile not found"
             )
             
-        return result.data[0]
+        return user_profile
     except Exception as e:
         logger.error(f"Error fetching profile: {e}")
         raise HTTPException(
@@ -40,7 +40,7 @@ async def update_my_profile(
     """
     Update the profile of the currently authenticated user.
     """
-    supabase = get_supabase()
+    db = get_db()
     
     # Filter out None values
     update_dict = {k: v for k, v in profile_data.dict().items() if v is not None}
@@ -52,15 +52,16 @@ async def update_my_profile(
         )
         
     try:
-        result = supabase.table("profiles").update(update_dict).eq("id", current_user.sub).execute()
+        result = await db.profiles.update_one({"_id": current_user.sub}, {"$set": update_dict})
         
-        if not result.data:
+        if result.matched_count == 0:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Profile not found or update failed"
             )
             
-        return result.data[0]
+        updated_profile = await db.profiles.find_one({"_id": current_user.sub})
+        return updated_profile
     except Exception as e:
         logger.error(f"Error updating profile: {e}")
         raise HTTPException(
@@ -76,18 +77,18 @@ async def get_user_profile(
     """
     Retrieve any user's profile (Role-based access should be enforced via RLS in Supabase).
     """
-    supabase = get_supabase()
+    db = get_db()
     
     try:
-        result = supabase.table("profiles").select("*").eq("id", user_id).execute()
+        user_profile = await db.profiles.find_one({"_id": user_id})
         
-        if not result.data:
+        if not user_profile:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Profile not found"
             )
             
-        return result.data[0]
+        return user_profile
     except Exception as e:
         logger.error(f"Error fetching user profile: {e}")
         raise HTTPException(

@@ -1,227 +1,432 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Alert, ScrollView, TouchableOpacity, Platform } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SPACING, TYPOGRAPHY } from '../theme';
-import GlassCard from '../components/GlassCard';
-import PrimaryButton from '../components/PrimaryButton';
-import { startWatching, stopWatching } from '../services/locationTracker';
-import { Navigation, Map as MapIcon, ShieldCheck, XCircle } from 'lucide-react-native';
+import React, { useEffect, useRef, useState } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+} from "react-native";
+import * as Location from "expo-location";
+import { CONFIG } from "../constants/config";
 
-const JourneyScreen = ({ navigation }: any) => {
-  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+const API_BASE = `${CONFIG.API_URL}/api/journey`;
 
-  useEffect(() => {
-    const initTracking = async () => {
-      try {
-        await startWatching((newCoords) => {
-          setCoords(newCoords);
-        });
-      } catch (err: any) {
-        setError(err.message);
-        Alert.alert('Permission Denied', 'Please enable location permissions to use Journey Guardian.');
+export default function JourneyScreen() {
+  const [journeyId, setJourneyId] = useState<string | null>(null);
+  const [tracking, setTracking] = useState(false);
+  const [status, setStatus] = useState("Ready to start journey");
+  const [loading, setLoading] = useState(false);
+  const websocketRef = useRef<WebSocket | null>(null);
+
+  // New states for AI Demo
+  const [etaMinutes, setEtaMinutes] = useState(2); // Demo speed (2 mins)
+  const [showAnomalyAlert, setShowAnomalyAlert] = useState(false);
+  const [lateAlert, setLateAlert] = useState(false);
+  const [lastMovementTime, setLastMovementTime] = useState(Date.now());
+  const [previousCoords, setPreviousCoords] = useState<any>(null);
+
+  // =====================================================
+  // START JOURNEY
+  // =====================================================
+  const startJourney = async () => {
+    try {
+      setLoading(true);
+      setStatus("Starting journey...");
+      
+      // Ask location permission
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission denied");
+        return;
       }
+
+      // Create journey in backend
+      const response = await fetch(`${API_BASE}/start`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user_id: "demo_user",
+          destination_name: "Home",
+          destination_lat: 12.9716,
+          destination_lng: 77.5946,
+          expected_arrival_time: new Date(
+            Date.now() + 30 * 60 * 1000
+          ).toISOString(),
+          shared_with: ["mom", "dad"],
+        }),
+      });
+
+      const data = await response.json();
+      console.log(data);
+
+      if (!data.success) {
+        Alert.alert("Failed to start journey");
+        return;
+      }
+
+      // Save journey ID
+      setJourneyId(data.journey_id);
+
+      // Connect websocket
+      connectWebSocket(data.journey_id);
+
+      // Start GPS tracking
+      startLocationTracking();
+
+      setTracking(true);
+      setStatus("Journey in progress");
+      Alert.alert("Journey Started");
+    } catch (error) {
+      console.log(error);
+      Alert.alert("Error starting journey");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // =====================================================
+  // WEBSOCKET CONNECTION
+  // =====================================================
+  const connectWebSocket = (id: string) => {
+    const wsUrl = `${CONFIG.API_URL.replace("http", "ws")}/api/journey/ws/location/${id}`;
+    console.log("Connecting to WebSocket:", wsUrl);
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log("WebSocket connected");
     };
-
-    initTracking();
-
-    return () => {
-      stopWatching();
+    ws.onmessage = (event) => {
+      console.log("Server:", event.data);
     };
-  }, []);
+    ws.onerror = (error) => {
+      console.log("WebSocket error", error);
+    };
+    ws.onclose = () => {
+      console.log("WebSocket disconnected");
+    };
+    websocketRef.current = ws;
+  };
 
+  // =====================================================
+  // LIVE LOCATION TRACKING
+  // =====================================================
+  const startLocationTracking = async () => {
+    await Location.watchPositionAsync(
+      {
+        accuracy: Location.Accuracy.High,
+        timeInterval: 10000,
+        distanceInterval: 20,
+      },
+      async (location) => {
+        const locationData = {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          speed: location.coords.speed || 0,
+        };
+        console.log("Location:", locationData);
+
+        // Movement detection (AI Demo)
+        if (previousCoords) {
+          const latDiff = Math.abs(previousCoords.latitude - locationData.latitude);
+          const lngDiff = Math.abs(previousCoords.longitude - locationData.longitude);
+          
+          // Very tiny movement
+          if (latDiff < 0.00005 && lngDiff < 0.00005) {
+            const currentTime = Date.now();
+            // No movement for 10 seconds (Demo speed)
+            if (currentTime - lastMovementTime > 10000) {
+              setShowAnomalyAlert(true);
+              setStatus("⚠️ Unusual stop detected");
+            }
+          } else {
+            // User moved
+            setLastMovementTime(Date.now());
+            setShowAnomalyAlert(false); // Reset alert if they move? (Good for demo)
+          }
+        }
+        setPreviousCoords(locationData);
+
+        // Send to backend via websocket
+        if (
+          websocketRef.current &&
+          websocketRef.current.readyState === WebSocket.OPEN
+        ) {
+          websocketRef.current.send(
+            JSON.stringify(locationData)
+          );
+        }
+      }
+    );
+  };
+
+  // =====================================================
+  // CONFIRM ARRIVAL
+  // =====================================================
+  const confirmArrival = async () => {
+    if (!journeyId) return;
+    try {
+      setLoading(true);
+      const response = await fetch(
+        `${API_BASE}/confirm-arrival/${journeyId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            user_id: "demo_user",
+          }),
+        }
+      );
+      const data = await response.json();
+      console.log(data);
+      setStatus("Safe arrival confirmed");
+      setTracking(false);
+      Alert.alert("Arrival Confirmed");
+      // Close websocket
+      websocketRef.current?.close();
+    } catch (error) {
+      console.log(error);
+      Alert.alert("Failed to confirm arrival");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // =====================================================
+  // EMERGENCY BUTTON
+  // =====================================================
+  const triggerEmergency = () => {
+    Alert.alert(
+      "Emergency",
+      "SOS Triggered!"
+    );
+    setStatus("Emergency alert triggered");
+  };
+
+  // =====================================================
+  // EFFECTS (AI Demo)
+  // =====================================================
+  // ETA Countdown
+  useEffect(() => {
+    let timer: any;
+    if (tracking && etaMinutes > 0) {
+      timer = setInterval(() => {
+        setEtaMinutes((prev) => prev - 1);
+      }, 10000); // Demo speed (10 seconds per minute)
+    }
+    return () => clearInterval(timer);
+  }, [tracking, etaMinutes]);
+
+  // Auto Late Alert
+  useEffect(() => {
+    if (etaMinutes <= 0 && tracking) {
+      setLateAlert(true);
+      setStatus("⚠️ Journey delayed");
+    }
+  }, [etaMinutes, tracking]);
+
+  // =====================================================
+  // UI
+  // =====================================================
   return (
-    <LinearGradient colors={GRADIENTS.dark} style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <Navigation size={48} color={COLORS.primary} />
-          <Text style={styles.title}>Journey Guardian</Text>
-          <Text style={styles.subtitle}>Real-time monitoring and threat detection active.</Text>
-        </View>
+    <View style={styles.container}>
+      <Text style={styles.title}>
+        Safe Journey Home
+      </Text>
 
-        <GlassCard style={styles.statusCard}>
-          <View style={styles.statusRow}>
-            <View style={styles.pulseContainer}>
-              <View style={styles.pulse} />
-            </View>
-            <Text style={styles.statusText}>ENCRYPTED TRACKING ACTIVE</Text>
-          </View>
-        </GlassCard>
+      {/* Destination Card */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>
+          Destination
+        </Text>
+        <Text style={styles.destination}>
+          Home
+        </Text>
+        <Text style={styles.subText}>
+          ETA Remaining: {etaMinutes} mins
+        </Text>
+      </View>
 
-        <GlassCard style={styles.locationCard}>
-          <View style={styles.iconRow}>
-            <MapIcon size={20} color={COLORS.secondary} />
-            <Text style={styles.locationTitle}>Live Coordinates</Text>
-          </View>
-          {coords ? (
-            <View style={styles.coordsWrapper}>
-              <View style={styles.coordBox}>
-                <Text style={styles.coordLabel}>LATITUDE</Text>
-                <Text style={styles.coordValue}>{coords.latitude.toFixed(6)}</Text>
-              </View>
-              <View style={styles.coordBox}>
-                <Text style={styles.coordLabel}>LONGITUDE</Text>
-                <Text style={styles.coordValue}>{coords.longitude.toFixed(6)}</Text>
-              </View>
-            </View>
-          ) : (
-            <Text style={styles.loadingText}>{error || 'Synchronizing with GPS satellites...'}</Text>
-          )}
-        </GlassCard>
+      {/* Status */}
+      <View style={styles.statusBox}>
+        <Text style={styles.statusText}>
+          {status}
+        </Text>
+      </View>
 
-        <View style={styles.featureList}>
-          <View style={styles.featureItem}>
-            <ShieldCheck size={20} color={COLORS.accent} />
-            <Text style={styles.featureText}>Threat Fusion Engine Monitoring</Text>
-          </View>
-          <View style={styles.featureItem}>
-            <ShieldCheck size={20} color={COLORS.accent} />
-            <Text style={styles.featureText}>Emergency Contact Notified</Text>
-          </View>
-        </View>
-
-        <View style={styles.footer}>
-          <PrimaryButton 
-            title="Trigger Emergency SOS" 
-            onPress={() => navigation.navigate('SOS')} 
-            style={styles.sosButton}
-          />
-          <View style={{ height: 15 }} />
-          <TouchableOpacity 
-            style={styles.cancelButton}
-            onPress={() => navigation.goBack()}
+      {/* Anomaly Alert UI */}
+      {showAnomalyAlert && (
+        <View
+          style={{
+            backgroundColor: "#FFF3CD",
+            padding: 15,
+            borderRadius: 12,
+            marginBottom: 20,
+          }}
+        >
+          <Text
+            style={{
+              color: "#856404",
+              fontWeight: "bold",
+              fontSize: 16,
+            }}
           >
-            <Text style={styles.cancelButtonText}>End Journey</Text>
-          </TouchableOpacity>
+            ⚠️ Unusual stop detected
+          </Text>
+          <Text
+            style={{
+              marginTop: 5,
+              color: "#856404",
+            }}
+          >
+            Are you safe?
+          </Text>
         </View>
-      </ScrollView>
-    </LinearGradient>
+      )}
+
+      {/* Late Alert UI */}
+      {lateAlert && (
+        <View
+          style={{
+            backgroundColor: "#F8D7DA",
+            padding: 15,
+            borderRadius: 12,
+            marginBottom: 20,
+          }}
+        >
+          <Text
+            style={{
+              color: "#721C24",
+              fontWeight: "bold",
+              fontSize: 16,
+            }}
+          >
+            ⚠️ You are delayed
+          </Text>
+          <Text
+            style={{
+              marginTop: 5,
+              color: "#721C24",
+            }}
+          >
+            Trusted contacts are being notified.
+          </Text>
+        </View>
+      )}
+
+      {/* Start Journey */}
+      {!tracking && (
+        <TouchableOpacity
+          style={styles.startButton}
+          onPress={startJourney}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>
+              Start Journey
+            </Text>
+          )}
+        </TouchableOpacity>
+      )}
+
+      {/* Confirm Arrival */}
+      {tracking && (
+        <TouchableOpacity
+          style={styles.confirmButton}
+          onPress={confirmArrival}
+        >
+          <Text style={styles.buttonText}>
+            Confirm Arrival
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Emergency */}
+      {tracking && (
+        <TouchableOpacity
+          style={styles.emergencyButton}
+          onPress={triggerEmergency}
+        >
+          <Text style={styles.buttonText}>
+            Emergency SOS
+          </Text>
+        </TouchableOpacity>
+      )}
+    </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  scrollContent: {
-    padding: SPACING.lg,
-    paddingTop: 60,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 30,
+    justifyContent: "center",
+    padding: 20,
+    backgroundColor: "#f5f5f5",
   },
   title: {
-    ...TYPOGRAPHY.h1,
+    fontSize: 28,
+    fontWeight: "bold",
+    marginBottom: 30,
+    textAlign: "center",
+  },
+  card: {
+    backgroundColor: "#fff",
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  cardTitle: {
+    fontSize: 16,
+    color: "#666",
+  },
+  destination: {
+    fontSize: 24,
+    fontWeight: "bold",
     marginTop: 10,
   },
-  subtitle: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    marginTop: 5,
+  subText: {
+    marginTop: 10,
+    color: "#666",
   },
-  statusCard: {
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-    padding: SPACING.md,
+  statusBox: {
+    padding: 20,
+    backgroundColor: "#fff",
+    borderRadius: 12,
     marginBottom: 20,
-    alignItems: 'center',
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  pulseContainer: {
-    width: 12,
-    height: 12,
-    marginRight: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pulse: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.accent,
   },
   statusText: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.accent,
-    fontWeight: 'bold',
-    letterSpacing: 1,
+    textAlign: "center",
+    fontSize: 16,
+    fontWeight: "600",
   },
-  locationCard: {
-    padding: SPACING.lg,
-    marginBottom: 30,
-  },
-  iconRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  locationTitle: {
-    ...TYPOGRAPHY.h3,
-    marginLeft: 10,
-  },
-  coordsWrapper: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  coordBox: {
-    width: '48%',
-  },
-  coordLabel: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
-    marginBottom: 4,
-  },
-  coordValue: {
-    ...TYPOGRAPHY.h3,
-    color: COLORS.secondary,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  loadingText: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.textMuted,
-    fontStyle: 'italic',
-    textAlign: 'center',
-  },
-  featureList: {
-    marginBottom: 40,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    padding: 12,
+  startButton: {
+    backgroundColor: "#2196F3",
+    padding: 18,
     borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 15,
   },
-  featureText: {
-    ...TYPOGRAPHY.body,
-    fontSize: 14,
-    marginLeft: 10,
-    color: COLORS.text,
+  confirmButton: {
+    backgroundColor: "#4CAF50",
+    padding: 18,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 15,
   },
-  footer: {
-    marginBottom: 40,
+  emergencyButton: {
+    backgroundColor: "#F44336",
+    padding: 18,
+    borderRadius: 12,
+    alignItems: "center",
   },
-  sosButton: {
-    backgroundColor: COLORS.error,
-  },
-  cancelButton: {
-    height: 56,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  cancelButtonText: {
-    ...TYPOGRAPHY.h3,
-    color: COLORS.textMuted,
+  buttonText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 16,
   },
 });
-
-export default JourneyScreen;

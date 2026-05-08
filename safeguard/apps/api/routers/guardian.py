@@ -3,7 +3,7 @@ from typing import List
 from models.guardian import LinkedChildInfo
 from models.user import TokenData
 from utils.auth import get_current_user
-from database import get_supabase
+from database import get_db
 
 router = APIRouter(prefix="/api/guardian", tags=["Guardian"])
 
@@ -15,14 +15,15 @@ async def get_linked_children(current_user: TokenData = Depends(get_current_user
             detail="Only parents can access this dashboard"
         )
     
-    supabase = get_supabase()
+    db = get_db()
     
     # In a real app, we would query a 'guardian_links' table or child_profiles
     # For this hackathon demo, we query profiles with role 'child'
-    result = supabase.table("profiles").select("*").eq("role", "child").execute()
+    cursor = db.profiles.find({"role": "child"})
+    profiles_data = await cursor.to_list(length=100)
     
     children = []
-    for p in result.data:
+    for p in profiles_data:
         children.append(LinkedChildInfo(
             id=str(p['id']),
             name=p.get('full_name') or "Child User",
@@ -37,6 +38,7 @@ async def get_linked_children(current_user: TokenData = Depends(get_current_user
 
 @router.get("/incidents/{child_id}")
 async def get_child_incidents(child_id: str, current_user: TokenData = Depends(get_current_user)):
-    supabase = get_supabase()
-    result = supabase.table("sos_events").select("*").eq("user_id", child_id).order("created_at", desc=True).execute()
-    return result.data
+    db = get_db()
+    cursor = db.sos_events.find({"user_id": child_id}).sort("created_at", -1)
+    events = await cursor.to_list(length=100)
+    return events

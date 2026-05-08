@@ -2,11 +2,9 @@ from pydantic_settings import BaseSettings
 from typing import Optional
 
 class Settings(BaseSettings):
-    # SUPABASE
-    SUPABASE_URL: str = "https://fffrstfabeacsmevpqjn.supabase.co"
-    SUPABASE_ANON_KEY: str = "your-anon-key"
-    SUPABASE_SERVICE_KEY: Optional[str] = None
-    DATABASE_URL: str = "postgresql://postgres:KlEcBRl3Ny82zDtS@db.fffrstfabeacsmevpqjn.supabase.co:5432/postgres"
+    # MONGODB
+    MONGO_URI: str = "mongodb://localhost:27017"
+    MONGO_DB_NAME: str = "safeguard"
 
     # SANDBOX API (Aadhaar)
     SANDBOX_API_KEY: str = "key_live_eff84033520944e68f3008326c46613f"
@@ -49,5 +47,6 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 settings = Settings()

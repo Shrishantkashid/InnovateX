@@ -90,6 +90,7 @@ const HomeScreen = ({ navigation }: any) => {
               </GlassCard>
             </TouchableOpacity>
           </View>
+          <TouchableOpacity  style={{    backgroundColor: "#2196F3",    padding: 18,    borderRadius: 12,    marginTop: 20,    alignItems: "center",  }}  onPress={() => navigation.navigate("Journey")}>  <Text    style={{      color: "#fff",      fontWeight: "bold",      fontSize: 16,    }}  >    Safe Journey Home  </Text></TouchableOpacity>
         </View>
 
         {/* Parent Portal */}

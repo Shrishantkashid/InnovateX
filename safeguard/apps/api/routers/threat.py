@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from models.threat import ThreatSignal, ThreatResponse, RiskResponse
 from services.threat_engine import threat_engine
-from database import get_supabase
 from utils.auth import get_current_user
 from models.user import TokenData
 

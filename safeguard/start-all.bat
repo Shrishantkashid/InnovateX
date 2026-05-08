@@ -13,7 +13,7 @@ start "SafeGuard Dashboard" cmd /k "cd apps\dashboard && npm run dev"
 
 echo.
 echo Starting Mobile App (Expo)...
-start "SafeGuard Mobile" cmd /k "cd apps\mobile && npx expo start"
+start "SafeGuard Mobile" cmd /k "cd apps\mobile && npx expo start --offline -c"
 
 echo.
 echo ==========================================

@@ -1,6 +1,6 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from database import get_supabase
+from database import get_db
 from models.user import TokenData
 from config import settings
 import logging
@@ -14,37 +14,20 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     """
     Verifies the Supabase JWT token and returns the user data.
     """
-    supabase = get_supabase()
-    
     try:
-        # ---------------------------------------------------------
-        # HACKATHON / DEMO BYPASS:
-        # Check if this is a local JWT first before asking Supabase
-        # ---------------------------------------------------------
         from jose import jwt, JWTError
         try:
             payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
             if "email" in payload and "sub" in payload:
                 return TokenData(email=payload["email"], role=payload["role"], sub=payload["sub"])
+            else:
+                raise ValueError("Invalid payload structure")
         except JWTError:
-            pass # Not a local token, fallback to Supabase
-            
-        # Supabase auth.get_user(jwt) verifies the token and returns user details
-        user_response = supabase.auth.get_user(token)
-        
-        if not user_response or not user_response.user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or expired session",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        
-        user = user_response.user
-        # Extract role from user metadata (Supabase stores this in raw_user_meta_data)
-        role = user.user_metadata.get("role")
-        email = user.email
-        
-        return TokenData(email=email, role=role, sub=str(user.id))
         
     except Exception as e:
         logger.error(f"Auth verification failed: {e}")

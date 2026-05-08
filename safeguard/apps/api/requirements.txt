@@ -6,11 +6,11 @@ python-jose[cryptography]
 passlib[bcrypt]
 python-multipart
 python-dotenv
-psycopg2-binary
+motor
+pymongo
 twilio
 httpx
 slowapi
-supabase
 pydantic-settings
 requests
 email-validator

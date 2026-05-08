@@ -4,7 +4,8 @@ from typing import List, Optional
 from models.sos import SOSCreate, SOSResponse, LocationPing, SOSResolve, SOSCreateRequest
 from models.user import TokenData
 from utils.auth import get_current_user
-from database import get_supabase
+from database import get_db
+import uuid
 import secrets
 import logging
 
@@ -12,20 +13,24 @@ router = APIRouter(prefix="/api", tags=["SOS & Location"])
 
 @router.post("/sos", response_model=SOSResponse)
 async def create_sos(sos: SOSCreate, current_user: TokenData = Depends(get_current_user)):
-    supabase = get_supabase()
+    db = get_db()
     
     # 1. Generate track token
     track_token = secrets.token_urlsafe(8)
+    sos_event_id = str(uuid.uuid4())
     
     # 2. Insert into sos_events table
     sos_data = {
+        "_id": sos_event_id,
+        "id": sos_event_id,
         "user_id": current_user.sub,
         "lat": sos.lat,
         "lng": sos.lng,
         "trigger_type": sos.trigger_type,
         "threat_score": sos.threat_score,
         "track_token": track_token,
-        "resolved": False
+        "resolved": False,
+        "created_at": datetime.utcnow().isoformat()
     }
     
     # Infer module from role
@@ -34,23 +39,16 @@ async def create_sos(sos: SOSCreate, current_user: TokenData = Depends(get_curre
     elif current_user.role == "child":
         sos_data["module"] = "m2"
     
-    result = supabase.table("sos_events").insert(sos_data).execute()
-    
-    if not result.data:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail="Failed to create SOS event"
-        )
-    
-    sos_event_id = result.data[0]["id"]
+    await db.sos_events.insert_one(sos_data)
     
     # 3. Trigger notifications (Twilio, Push)
     contacts = []
     try:
         from services.notification import notification_service
         # Fetch contacts from DB
-        contacts_result = supabase.table("trusted_contacts").select("contact_phone").eq("user_id", current_user.sub).execute()
-        contacts = [{"phone": c["contact_phone"]} for c in contacts_result.data] if contacts_result.data else []
+        contacts_cursor = db.trusted_contacts.find({"user_id": current_user.sub})
+        contacts_data = await contacts_cursor.to_list(length=100)
+        contacts = [{"phone": c["contact_phone"]} for c in contacts_data] if contacts_data else []
         
         # Add a placeholder if no contacts found for testing
         if not contacts:
@@ -86,33 +84,34 @@ async def create_sos_v2(sos: SOSCreateRequest, current_user: TokenData = Depends
 
 @router.post("/location")
 async def stream_location(ping: LocationPing, current_user: TokenData = Depends(get_current_user)):
-    supabase = get_supabase()
+    db = get_db()
     
     ping_data = {
+        "_id": str(uuid.uuid4()),
         "user_id": current_user.sub,
         "sos_event_id": str(ping.sos_event_id),
         "lat": ping.lat,
         "lng": ping.lng,
-        "accuracy": ping.accuracy
+        "accuracy": ping.accuracy,
+        "created_at": datetime.utcnow().isoformat()
     }
     
-    result = supabase.table("location_pings").insert(ping_data).execute()
-    
-    if not result.data:
-        raise HTTPException(status_code=500, detail="Failed to log location ping")
+    await db.location_pings.insert_one(ping_data)
         
     return {"received": True}
 
 async def resolve_sos(sos_id: str, resolution: SOSResolve):
-    supabase = get_supabase()
+    db = get_db()
     
     update_data = {
-        "resolved": True
+        "$set": {
+            "resolved": True
+        }
     }
     
-    result = supabase.table("sos_events").update(update_data).eq("id", sos_id).execute()
+    result = await db.sos_events.update_one({"id": sos_id}, update_data)
     
-    if not result.data:
+    if result.matched_count == 0:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, 
             detail="SOS event not found"
@@ -129,16 +128,13 @@ async def resolve_sos_v2(
 
 @router.get("/sos/history")
 async def get_sos_history(current_user: TokenData = Depends(get_current_user)):
-    supabase = get_supabase()
+    db = get_db()
     
     # Fetch user's incidents
-    result = supabase.table("sos_events")\
-        .select("*")\
-        .eq("user_id", current_user.sub)\
-        .order("created_at", desc=True)\
-        .execute()
+    cursor = db.sos_events.find({"user_id": current_user.sub}).sort("created_at", -1)
+    data = await cursor.to_list(length=100)
     
-    return result.data
+    return data
 
 @router.get("/sos/{sos_id}/status")
 async def get_sos_status(sos_id: str, current_user: TokenData = Depends(get_current_user)):

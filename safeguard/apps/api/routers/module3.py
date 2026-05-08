@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from models.module3 import BehaviourLog, ContactScore, DigestRequest, DigestResponse
-from database import get_supabase
+from database import get_db
 from utils.auth import get_current_user, require_role
 from models.user import TokenData
 from uuid import uuid4
@@ -26,7 +26,7 @@ async def receive_contact_score(
     score: ContactScore,
     current_user: TokenData = Depends(require_role(["child"]))
 ):
-    supabase = get_supabase()
+    db = get_db()
     
     score_data = {
         "child_id": current_user.sub,
@@ -35,10 +35,7 @@ async def receive_contact_score(
         "top_flags": score.flags
     }
     
-    result = supabase.table("contact_risk_scores").insert(score_data).execute()
-    
-    if not result.data:
-        raise HTTPException(status_code=500, detail="Failed to save contact score")
+    await db.contact_risk_scores.insert_one(score_data)
         
     return {"received": True, "alert_parent": score.grooming_score > 0.7}
 
@@ -47,7 +44,7 @@ async def receive_behaviour_logs(
     log: BehaviourLog,
     current_user: TokenData = Depends(require_role(["child"]))
 ):
-    supabase = get_supabase()
+    db = get_db()
     
     # Batch insert usage logs
     logs_data = []
@@ -61,8 +58,6 @@ async def receive_behaviour_logs(
         })
     
     if logs_data:
-        result = supabase.table("app_usage_log").insert(logs_data).execute()
-        if not result.data:
-            raise HTTPException(status_code=500, detail="Failed to save behaviour logs")
+        await db.app_usage_log.insert_many(logs_data)
             
     return {"received": True, "anomaly_detected": False}

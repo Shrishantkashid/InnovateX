@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from models.user import TokenData, AadhaarOTPRequest, AadhaarVerifyRequest
 from utils.auth import get_current_user, require_role
 from services.aadhaar_service import aadhaar_service
-from database import get_supabase
+from database import get_db
 import random
 import string
 import logging
@@ -49,7 +49,7 @@ async def verify_aadhaar_otp(
     """
     Verify Aadhaar OTP, extract gender, and approve if female.
     """
-    supabase = get_supabase()
+    db = get_db()
     
     try:
         result = await aadhaar_service.verify_otp(payload.otp, payload.reference_id)
@@ -79,10 +79,15 @@ async def verify_aadhaar_otp(
             "full_name_verified": user_details.get("full_name")
         }
         
-        update_result = supabase.table("profiles").update({
-            "is_verified": True,
-            "verification_metadata": verification_metadata
-        }).eq("id", current_user.sub).execute()
+        await db.profiles.update_one(
+            {"_id": current_user.sub},
+            {
+                "$set": {
+                    "is_verified": True,
+                    "verification_metadata": verification_metadata
+                }
+            }
+        )
         
         return {
             "message": "Aadhaar verification successful. Welcome to SafeGuard!",
@@ -115,7 +120,7 @@ async def generate_role_id(
             detail="ID generation only available for Child or Parent roles."
         )
     
-    supabase = get_supabase()
+    db = get_db()
     
     # Generate random suffix
     suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
@@ -123,19 +128,20 @@ async def generate_role_id(
     
     try:
         # Update the respective profile table
-        table_name = "child_profiles" if current_user.role == "child" else "parent_profiles"
+        collection_name = "child_profiles" if current_user.role == "child" else "parent_profiles"
         column_name = "child_id_tag" if current_user.role == "child" else "parent_id_tag"
         
-        # Check if user already has a role profile, if not create one
-        existing = supabase.table(table_name).select("*").eq("user_id", current_user.sub).execute()
-        
-        if existing.data:
-            supabase.table(table_name).update({column_name: role_id}).eq("user_id", current_user.sub).execute()
-        else:
-            supabase.table(table_name).insert({
-                "user_id": current_user.sub,
-                column_name: role_id
-            }).execute()
+        # Use upsert to check if user already has a role profile, if not create one
+        await db[collection_name].update_one(
+            {"user_id": current_user.sub},
+            {
+                "$set": {
+                    "user_id": current_user.sub,
+                    column_name: role_id
+                }
+            },
+            upsert=True
+        )
             
         return {
             "message": f"{current_user.role.capitalize()} ID generated successfully",

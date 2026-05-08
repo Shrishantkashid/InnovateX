@@ -1,5 +1,15 @@
 from fastapi import APIRouter, HTTPException, status, Depends
-from database import get_supabase
+from database import get_db
+import uuid
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
 import os
 import requests
 from models.schemas import (
@@ -20,53 +30,45 @@ SANDBOX_BASE_URL = os.getenv("SANDBOX_BASE_URL", "https://api.sandbox.co.in")
 @router.post("/signup", response_model=Token)
 async def signup(user_data: UserCreate):
     print(f"--- SIGNUP ATTEMPT FOR: {user_data.email} ---")
-    supabase = get_supabase()
+    db = get_db()
     
-    # 1. Sign up user via Supabase Auth
     try:
-        print("Calling supabase.auth.sign_up...")
-        # We pass metadata so it can be used by triggers or manual insert
-        res = supabase.auth.sign_up({
-            "email": user_data.email,
-            "password": user_data.password,
-            "options": {
-                "data": {
-                    "full_name": user_data.name,
-                    "role": user_data.role,
-                    "module": user_data.module
-                }
-            }
-        })
-        print(f"Supabase auth response received. Success: {bool(res.user)}")
-        
-        if not res.user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Signup failed"
-            )
+        existing_user = await db.profiles.find_one({"email": user_data.email})
+        if existing_user:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
             
-        user = res.user
+        user_id = str(uuid.uuid4())
+        hashed_pwd = get_password_hash(user_data.password)
         
-        # 2. Manually ensure profile exists (in case trigger is not set)
         profile_payload = {
-            "id": user.id,
+            "_id": user_id,
+            "id": user_id, # Keep id field for frontend compatibility
             "email": user_data.email,
+            "hashed_password": hashed_pwd,
             "full_name": user_data.name,
             "role": user_data.role,
             "module": user_data.module,
             "phone": user_data.phone
         }
         
-        print(f"Upserting profile for user {user.id} into profiles table...")
-        # We use upsert to be safe
-        supabase.table("profiles").upsert(profile_payload).execute()
-        print("Profile upserted successfully. Returning token.")
+        await db.profiles.insert_one(profile_payload)
+        
+        from jose import jwt
+        from datetime import datetime, timedelta
+        from config import settings
+        
+        expire = datetime.utcnow() + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
+        token = jwt.encode(
+            {"sub": user_id, "email": user_data.email, "role": user_data.role, "exp": expire},
+            settings.JWT_SECRET, 
+            algorithm=settings.JWT_ALGORITHM
+        )
         
         return {
-            "access_token": res.session.access_token,
+            "access_token": token,
             "token_type": "bearer",
             "user": {
-                "id": str(user.id),
+                "id": user_id,
                 "email": user_data.email,
                 "role": user_data.role,
                 "full_name": user_data.name,
@@ -74,6 +76,8 @@ async def signup(user_data: UserCreate):
             }
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"SIGNUP EXCEPTION: {str(e)}")
         import traceback
@@ -86,81 +90,48 @@ async def signup(user_data: UserCreate):
 @router.post("/login", response_model=Token)
 async def login(credentials: UserLogin):
     print(f"--- LOGIN ATTEMPT FOR: {credentials.email} ---")
-    supabase = get_supabase()
-    
-    # ---------------------------------------------------------
-    # HACKATHON / DEMO BYPASS: 
-    # If password is 'demo123', bypass Supabase Auth completely
-    # and just log them in as the first user in the database.
-    # ---------------------------------------------------------
-    if credentials.password == "demo123":
-        print("DEMO MODE ACTIVATED. Bypassing Supabase Auth.")
-        profile = supabase.table("profiles").select("*").limit(1).execute()
-        if profile.data:
-            from jose import jwt
-            from datetime import datetime, timedelta
-            from config import settings
-            
-            user_data = profile.data[0]
-            expire = datetime.utcnow() + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
-            token = jwt.encode(
-                {"sub": user_data["id"], "email": user_data["email"], "role": user_data["role"], "exp": expire},
-                settings.JWT_SECRET, 
-                algorithm=settings.JWT_ALGORITHM
-            )
-            return {
-                "access_token": token,
-                "token_type": "bearer",
-                "user": {
-                    "id": user_data["id"],
-                    "email": user_data["email"],
-                    "role": user_data["role"],
-                    "full_name": user_data["full_name"],
-                    "phone": user_data.get("phone", "")
-                }
-            }
-    # ---------------------------------------------------------
+    db = get_db()
     
     try:
-        print("Calling supabase.auth.sign_in_with_password...")
-        res = supabase.auth.sign_in_with_password({
-            "email": credentials.email,
-            "password": credentials.password
-        })
-        print(f"Supabase auth response received. Success: {bool(res.session)}")
+        user = await db.profiles.find_one({"email": credentials.email})
         
-        if not res.session:
+        if not user or not verify_password(credentials.password, user["hashed_password"]):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password"
             )
             
-        user = res.user
+        from jose import jwt
+        from datetime import datetime, timedelta
+        from config import settings
         
-        print(f"Fetching profile for user {user.id} from profiles table...")
-        # Fetch role and other data from profiles table
-        profile = supabase.table("profiles").select("*").eq("id", user.id).execute()
-        print(f"Profile fetched successfully.")
-        role = profile.data[0].get("role", "woman") if profile.data else "woman"
-        full_name = profile.data[0].get("full_name") if profile.data else ""
+        expire = datetime.utcnow() + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
+        token = jwt.encode(
+            {"sub": user["_id"], "email": user["email"], "role": user["role"], "exp": expire},
+            settings.JWT_SECRET, 
+            algorithm=settings.JWT_ALGORITHM
+        )
         
         return {
-            "access_token": res.session.access_token,
+            "access_token": token,
             "token_type": "bearer",
             "user": {
-                "id": str(user.id),
-                "email": user.email,
-                "role": role,
-                "full_name": full_name
+                "id": user["_id"],
+                "email": user["email"],
+                "role": user["role"],
+                "full_name": user.get("full_name", ""),
+                "phone": user.get("phone", "")
             }
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"LOGIN EXCEPTION: {str(e)}")
         import traceback
         traceback.print_exc()
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Authentication failed"
         )
 
