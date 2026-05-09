@@ -1,0 +1,1493 @@
+================================================================================
+SAFEGUARD — PRODUCT REQUIREMENTS DOCUMENT (PRD)
+Full Technical + Product Specification
+Version 1.0 | Women & Children Safety Platform
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+1.  Executive Summary
+2.  Problem Statement
+3.  Target Users & Personas
+4.  Product Vision & Differentiators
+5.  System Architecture Overview
+6.  Module 1 — Women Physical Safety
+7.  Module 2 — Child Physical Safety
+8.  Module 3 — Digital Child Safety (Parental Controls)
+9.  Shared Infrastructure
+10. Database Schema (All Tables)
+11. API Specification (All Endpoints)
+12. AI/ML Component Specifications
+13. Notification Delivery System
+14. Authority Dashboard
+15. Tech Stack (Full)
+16. Repository Structure
+17. Team & Branch Ownership
+18. Sprint Plan (24-Hour Execution)
+19. Environment Variables & Configuration
+20. Demo Script
+21. Pitch Differentiators
+22. Risk & Mitigation
+23. Future Roadmap
+
+
+================================================================================
+1. EXECUTIVE SUMMARY
+================================================================================
+
+SafeGuard is an AI-powered safety platform with three interconnected modules
+targeting women, children who carry phones, and children's digital activity.
+
+The core thesis: every existing safety app requires the victim to act. SafeGuard
+is the first system that protects users when they cannot act — using passive AI
+that listens, watches, and responds automatically.
+
+Platform name     : SafeGuard
+Tagline           : Protect without being asked
+Target hackathon  : Women & Children Safety Track
+Team size         : 4 developers
+Build window      : 24 hours
+Primary mobile    : React Native + Expo
+Backend           : FastAPI + Python
+Database          : Supabase (Postgres + Realtime + Storage + PostGIS)
+AI stack          : YAMNet TFLite, MiniLM, GPT-4o-mini, DBSCAN, Whisper STT
+Notifications     : Twilio SMS, Twilio Voice, Twilio WhatsApp, Expo Push
+Dashboards        : React + Leaflet.js + Recharts
+Deploy            : Railway (API), Vercel (dashboards), Expo Go (mobile)
+
+
+================================================================================
+2. PROBLEM STATEMENT
+================================================================================
+
+Women and children face physical and digital safety threats daily. Despite
+dozens of existing safety apps, three critical gaps remain unsolved:
+
+GAP 1 — REQUIRES USER ACTION
+All existing SOS apps (bSafe, Shake2Safety, Safetipin, Noonlight) require the
+user to physically tap, hold, or shake their phone. In real danger, victims
+are often physically restrained, in shock, or cannot reach their device.
+
+GAP 2 — REACTIVE NOT PREDICTIVE
+Current apps respond after danger is reported. None analyse route risk before
+the journey starts, or detect threat signals before an incident occurs.
+
+GAP 3 — NO CHILD-SPECIFIC DIGITAL THREAT DETECTION
+Parental control apps (Qustodio, Screen Time, Family Link) either block
+everything bluntly or screenshot messages invasively. None use AI to detect
+grooming patterns in conversation behaviour without reading message content.
+
+SafeGuard addresses all three gaps across three user modules.
+
+
+================================================================================
+3. TARGET USERS & PERSONAS
+================================================================================
+
+--- PERSONA 1: ADULT WOMAN ---
+Name            : Priya, 26, software engineer
+Context         : Commutes late at night, travels alone for work
+Pain point      : Cannot discreetly call for help if followed or grabbed
+Need            : System that works without any action from her
+Device          : Android / iOS smartphone
+
+--- PERSONA 2: CHILD WITH PHONE (Physical Safety) ---
+Name            : Arjun, 12, school student
+Context         : Travels alone between school and home / tuition
+Pain point      : Cannot call parent if in danger without alerting attacker
+Need            : Passive protection identical to women's module + parent loop
+Device          : Basic Android smartphone
+
+--- PERSONA 3: PARENT MONITORING CHILD (Digital Safety) ---
+Name            : Meena, 38, mother of a 14-year-old
+Context         : Child uses phone unsupervised, active on social platforms
+Pain point      : Doesn't want to invade privacy but fears online predators
+Need            : AI that detects risk patterns without reading messages
+Device          : Android / iOS + web browser for dashboard
+
+
+================================================================================
+4. PRODUCT VISION & DIFFERENTIATORS
+================================================================================
+
+WHAT EVERY OTHER TEAM WILL BUILD:
+  x  SOS button — user must physically tap
+  x  GPS tracking — reactive, shows location after fact
+  x  SMS to contacts — same feature since 2015
+  x  Shake gesture — visible to an attacker
+  x  No AI — just location plumbing
+  x  No authority integration — isolated app
+
+WHAT SAFEGUARD DOES DIFFERENTLY:
+  ✓  Passive audio threat detection — triggers without user action
+  ✓  Predictive route risk — warns BEFORE journey starts
+  ✓  Journey guardian mode — auto-alerts if ETA is missed
+  ✓  Silent voice codeword — discrete trigger, invisible to attacker
+  ✓  Multi-modal AI — audio + motion + time + location fused
+  ✓  Child-specific escalation — parent called first, not authorities
+  ✓  Grooming pattern detection — reads conversation shape, not content
+  ✓  Authority heatmap dashboard — real-time incident clustering for police
+  ✓  Conversation coaching — tells parents HOW to talk to their child
+
+ONE-LINE PITCH:
+"Every existing safety app requires the victim to act. SafeGuard is the first
+system that protects you when you can't — using passive AI that listens,
+watches, and responds automatically."
+
+
+================================================================================
+5. SYSTEM ARCHITECTURE OVERVIEW
+================================================================================
+
+All three modules share a single backend infrastructure:
+
+  ┌─────────────────────────────────────────────────────────┐
+  │                    CLIENT LAYER                         │
+  │  Mobile App (Expo RN)    Parent Dashboard (React Web)   │
+  │  Women + Child M2 + M3   M2 Live View + M3 Risk Cards   │
+  └────────────────────┬────────────────────────────────────┘
+                       │ HTTPS / WebSocket
+  ┌────────────────────▼────────────────────────────────────┐
+  │              SHARED FASTAPI GATEWAY                      │
+  │  JWT auth middleware · rate limiting · module routing    │
+  └──────┬──────────────────┬──────────────────┬────────────┘
+         │                  │                  │
+  ┌──────▼──────┐  ┌────────▼──────┐  ┌───────▼────────┐
+  │ Threat      │  │  Supabase     │  │  AI Safety     │
+  │ Engine      │  │  Core         │  │  Service       │
+  │ (M1 + M2)  │  │  Postgres +   │  │  (M3)          │
+  │ SOS orch.  │  │  Realtime +   │  │  MiniLM +      │
+  │ Radius chk │  │  Storage +    │  │  GPT-4o-mini   │
+  │ Escalation │  │  PostGIS      │  │  Grooming det. │
+  └──────┬──────┘  └────────┬──────┘  └───────┬────────┘
+         │                  │                  │
+  ┌──────▼──────────────────▼──────────────────▼──────────┐
+  │              NOTIFICATION DELIVERY LAYER               │
+  │  Twilio SMS · Twilio Voice · WhatsApp · Expo Push     │
+  └───────────────────────────────────────────────────────┘
+         │
+  ┌──────▼──────────────────────────────────────────────┐
+  │           AUTHORITY DASHBOARD (React + Vercel)      │
+  │  Live incident map · Heatmap · Case management      │
+  └─────────────────────────────────────────────────────┘
+
+Deploy targets:
+  API          → Railway (Docker container)
+  Dashboards   → Vercel (static + SSR)
+  Mobile       → Expo Go (demo) / EAS Build (production)
+  Local dev    → Docker Compose
+
+
+================================================================================
+6. MODULE 1 — WOMEN PHYSICAL SAFETY
+================================================================================
+
+6.1 OVERVIEW
+------------
+Passive, automatic threat detection that works even when the woman cannot
+physically interact with her phone.
+
+6.2 USER JOURNEY
+----------------
+Step 1 — Plan journey
+  User enters destination. AI scores route risk (1–5) using time-of-day,
+  historical crime data, and Google Places. Suggests safest path.
+
+Step 2 — Journey mode ON
+  App runs silently in background. Microphone monitors for threat audio.
+  Accelerometer monitors for struggle/impact. No interaction required.
+
+Step 3 — Threat detected
+  AI detects distress audio OR motion anomaly OR missed ETA.
+  Sends silent 10-second confirmation ping to user.
+
+Step 4 — No response
+  If user doesn't dismiss: auto-SOS fires.
+  Live location + 30s audio clip sent to contacts + authority dashboard.
+
+Step 5 — Safe arrival
+  User taps "I'm home safely." Contacts notified. Trip data fed back
+  to improve area risk model.
+
+6.3 FEATURE SET
+---------------
+FEATURE: Journey Guardian Mode
+  Description : User sets destination + ETA. If not dismissed on arrival,
+                auto-SOS fires after 60s grace period.
+  Tech        : Background timer + expo-location geofencing
+  Priority    : Must build (hours 0–10)
+
+FEATURE: Passive Audio Sentinel
+  Description : Microphone samples 3s audio every 10s. YAMNet TFLite
+                classifies for screaming, confrontation, sudden silence.
+                Trigger threshold: confidence >= 0.70
+  Tech        : expo-av + YAMNet TFLite (on-device inference)
+  Priority    : Must build (hours 0–10)
+
+FEATURE: SOS with Audio Evidence
+  Description : On trigger (auto or manual), app records last 30s of audio
+                + current GPS. Sends both to trusted contacts and stores in
+                Supabase Storage for authority evidence.
+  Tech        : expo-av circular buffer + Supabase Storage
+  Priority    : Must build (hours 0–10)
+
+FEATURE: Route Risk Intelligence
+  Description : Before journey, GPT-4o-mini analyses destination + time of
+                day + historical crime CSV → returns risk score 1–5 with
+                plain-English reasoning + safer alternative route.
+  Tech        : GPT-4o-mini + Google Places API + NCRB crime data CSV
+  Priority    : Differentiator (hours 10–18)
+
+FEATURE: Silent Codeword Trigger
+  Description : User pre-registers a phrase (e.g. "call mom"). On-device
+                STT listens continuously. If phrase detected → SOS fires
+                silently. No UI change visible to attacker.
+  Tech        : expo-speech / Whisper on-device STT
+  Priority    : Differentiator (hours 10–18)
+
+FEATURE: Motion Anomaly Detection
+  Description : Accelerometer sudden spike (impact) OR gyroscope rapid
+                rotation OR phone stationary for 5+ min post-SOS → escalate
+                alert tier automatically.
+  Tech        : expo-sensors (accelerometer + gyroscope fusion)
+  Priority    : Differentiator (hours 10–18)
+
+FEATURE: Fake Call Screen
+  Description : 2-tap combo opens a fake incoming call UI over the home
+                screen. Gives user a plausible cover action.
+  Tech        : React Native modal overlay
+  Priority    : Wow factor (hours 18–22)
+
+FEATURE: Community Guardian Network
+  Description : Nearby verified users within 500m receive a push notification
+                when SOS fires: "Someone nearby needs help."
+  Tech        : PostGIS geo-query + Expo Push
+  Priority    : Wow factor (hours 18–22)
+
+6.4 THREAT FUSION THRESHOLDS (MODULE 1)
+-----------------------------------------
+  Audio confidence    >= 0.70  → flag
+  Motion spike        >= 2.5g  → flag
+  ETA overdue         >= 5 min → flag
+  Time of day weight  : 10pm–5am = +15 pts to score
+
+  Score 0–40   : Monitor (no action)
+  Score 40–70  : Ping user with 10s dismiss window
+  Score 70–100 : Auto-SOS fires
+
+
+================================================================================
+7. MODULE 2 — CHILD PHYSICAL SAFETY
+================================================================================
+
+7.1 OVERVIEW
+------------
+Same threat model as Module 1, but child-specific: lower trigger thresholds,
+faster escalation, parent-first notification order, trusted adult radius system,
+and squeeze gesture for discreet SOS without codeword memory.
+
+7.2 KEY DIFFERENCES FROM MODULE 1
+-----------------------------------
+  Threshold          : 0.55 confidence (vs 0.70 for women) — children
+                       show less extreme acoustic distress signals
+  Confirm window     : 5 seconds (vs 10 seconds)
+  Escalation order   : Parent auto-call → trusted adult → contacts → authority
+                       (women: contacts → authority)
+  SOS trigger        : Squeeze gesture (volume up + down × 3) — works with
+                       phone in pocket, no codeword needed
+  No codeword        : Child doesn't need to remember or speak calmly
+  Screen change      : None on SOS — attacker sees nothing happen
+
+7.3 TRUSTED ADULT RADIUS SYSTEM
+---------------------------------
+  Setup (parent does this during onboarding):
+    - Draw safe zones on map: school, home, tutor's house, friend's home
+    - Add trusted adult list: teacher name+phone, aunt, neighbour
+    - Set school route schedule (time + expected path)
+
+  Runtime behaviour:
+    - App continuously checks child GPS against defined safe zones
+    - If child exits ALL zones AND no active "on journey" tag:
+        → Soft alert sent to parent with live location (not full SOS)
+        → Parent has 90 seconds to respond
+        → If no response → escalates to full SOS chain
+
+7.4 FEATURE SET
+---------------
+FEATURE: Squeeze SOS Gesture
+  Description : Volume up + volume down pressed 3 times in quick succession.
+                Works with phone in pocket, screen off. Silent — no sound,
+                no screen change, no vibration visible to attacker.
+  Tech        : React Native volume button listener (expo-av)
+  Priority    : Must build
+
+FEATURE: Trusted Radius Engine
+  Description : PostGIS polygon zones + real-time GPS check. Zone exit
+                triggers soft alert chain.
+  Tech        : PostGIS ST_Within() query, Supabase Realtime, expo-location
+  Priority    : Must build
+
+FEATURE: Parent Live View
+  Description : Parent app shows child's real-time location on Leaflet map.
+                Toggle to listen to ambient audio (parent must explicitly enable).
+  Tech        : Supabase Realtime + Leaflet.js
+  Priority    : Must build
+
+FEATURE: Audio Sentinel (Child-Tuned)
+  Description : Same YAMNet pipeline as Module 1, threshold lowered to 0.55.
+                Confirm window 5s (vs 10s).
+  Tech        : YAMNet TFLite on-device
+  Priority    : Must build
+
+FEATURE: ETA Guardian
+  Description : Parent sets expected arrival time for school, tuition, etc.
+                If child doesn't reach geofenced destination by ETA → soft alert.
+  Tech        : expo-location geofence + background timer
+  Priority    : Must build
+
+FEATURE: Parent-First Escalation
+  Description : On SOS fire:
+                T+0s   : Parent auto-call (Twilio Voice)
+                T+30s  : Trusted adult push notification (if parent unreachable)
+                T+60s  : All contacts SMS + live link
+                T+90s  : Authority dashboard incident created
+  Tech        : Twilio Voice + Expo Push + Supabase
+  Priority    : Must build
+
+7.5 THREAT FUSION THRESHOLDS (MODULE 2)
+-----------------------------------------
+  Audio confidence    >= 0.55  → flag (lower than M1)
+  Motion spike        >= 2.0g  → flag (lower than M1)
+  Zone exit           = instant soft alert
+  ETA overdue         >= 3 min → flag (shorter grace than M1)
+  Time of day weight  : applies same as M1
+
+  Score 0–30   : Monitor
+  Score 30–55  : Parent ping (shorter window — children need faster response)
+  Score 55–100 : Auto-SOS fires
+
+
+================================================================================
+8. MODULE 3 — DIGITAL CHILD SAFETY (PARENTAL CONTROLS)
+================================================================================
+
+8.1 OVERVIEW
+------------
+AI-powered digital safety that detects grooming patterns, behavioural shifts,
+and content risks — without reading message content. Privacy-preserving by
+design so the child doesn't resent the system and uninstall it.
+
+8.2 CORE PHILOSOPHY
+-------------------
+"We don't read your child's messages. We watch how conversations behave."
+
+The on-device monitor agent extracts only metadata and pattern scores —
+no raw message text is ever uploaded to the server. The MiniLM classifier
+runs entirely on the child's device. Only a scored, encrypted payload is
+sent to the backend.
+
+8.3 THREE DETECTION PILLARS
+-----------------------------
+
+PILLAR 1: GROOMING PATTERN DETECTOR
+  What it detects (behavioural signals, not message content):
+    - New contact (not in phone contacts) + adult name pattern
+    - Rapid message frequency escalation within 48 hours
+    - Secrecy cluster: "don't tell", "our secret", "just between us"
+    - Platform migration: "add me on Snapchat / Signal instead"
+    - Gift language: "I'll send you", "I can get you", "do you want"
+    - Late-night messaging window with unknown contact
+    - Age gap inference from name + conversation patterns
+
+  How it works:
+    MiniLM (lightweight NLP) runs on-device. It classifies conversation
+    metadata + flagged phrase clusters into a per-contact risk score 0–100.
+    No message text is transmitted — only {contact_id, flag_type, confidence}.
+
+  Model: sentence-transformers/paraphrase-MiniLM-L3-v2 (quantized, ~17MB)
+  Inference: on-device Python (Termux) or React Native bridged module
+  Output: POST /ai/grooming-score {contact_id, score, flags[]}
+
+PILLAR 2: BEHAVIOUR SHIFT TRACKER
+  What it detects:
+    - Baseline: 4-week rolling average of app usage patterns
+    - Flags: sudden increase in late-night phone use
+    - Flags: switching apps when parent is nearby (detected via motion)
+    - Flags: surge in messages from new unknown contact
+    - Flags: sudden drop in family communication apps
+
+  How it works:
+    Usage log collected every 15 minutes. Python worker compares current
+    week vs 4-week baseline. Delta > 2 standard deviations = flag.
+
+  Tech: Python statsmodels zscore + Supabase behaviour_baselines table
+  Output: POST /ai/behaviour-delta {child_id, delta_score, anomalies[]}
+
+PILLAR 3: CONTENT RISK SCORER
+  What it detects:
+    - NSFW image classification results (on-device, score only uploaded)
+    - DNS block event log (which categories triggered safe search)
+    - Search term clusters (hashed — specific terms never stored)
+
+  How it works:
+    On-device NSFW classifier (MobileNet-based, ~8MB) scores images
+    received in gallery. Score only (0–1 float) is uploaded — not the image.
+    DNS filter events come from NextDNS API integration.
+
+  Tech: TFLite NSFW model + NextDNS API
+  Output: POST /ai/content-flags {child_id, nsfw_score, dns_categories[]}
+
+8.4 RISK SYNTHESIS ENGINE
+--------------------------
+  Inputs: grooming_score + behaviour_delta + content_flags
+  Model : GPT-4o-mini with structured JSON output
+  Output:
+    {
+      composite_risk: 0–100,
+      risk_category: "low"|"moderate"|"high"|"critical",
+      top_flags: string[],
+      weekly_narrative: string,   // plain English summary for parent
+      conversation_starter: string // how to talk to child about this
+    }
+
+  Runs: daily batch (cron) + immediately on critical flag
+
+8.5 PARENT INTELLIGENCE DASHBOARD
+-----------------------------------
+  Risk score card       : Per-contact composite score, category breakdown,
+                          trend sparkline over 30 days
+  Weekly AI digest      : Plain-language narrative — no raw logs shown
+                          "Your child had 3 conversations with an unknown
+                          contact this week showing secrecy patterns."
+  Conversation coach    : GPT-4o-mini generated guide: "Here's a natural
+                          way to bring this up without breaking trust."
+  Instant alerts        : Push notification on high/critical risk flag
+  App usage charts      : Per-app daily time (Recharts bar chart)
+
+8.6 PARENTAL CONTROL ENFORCEMENT
+----------------------------------
+  DNS-level safe search : NextDNS API — blocks adult content at network level
+  Per-app time caps     : Daily limits enforced via device management profile
+  Contact allowlist     : Unknown contacts auto-flagged if not on parent list
+  Late-night lock       : Schedule-based phone lock (10pm–6am configurable)
+  Screen time report    : Weekly PDF digest emailed to parent
+
+
+================================================================================
+9. SHARED INFRASTRUCTURE
+================================================================================
+
+9.1 FASTAPI GATEWAY
+--------------------
+  Framework    : FastAPI (Python 3.11)
+  Auth         : JWT (role: "woman" | "child" | "parent" | "admin")
+  Middleware   : CORS, rate limiting (slowapi), request logging
+  Module routing: X-Module header ("physical_women"|"physical_child"|"digital")
+
+9.2 SUPABASE SETUP
+-------------------
+  Postgres     : Primary database (all structured data)
+  Realtime     : Live location streaming, SOS event push
+  Storage      : Audio evidence clips, PDF digests
+  PostGIS      : Geo-queries for trusted radius, guardian network
+  RLS          : Row-level security — child can only read own rows;
+                 parent can read child rows they are linked to
+
+9.3 REDIS (OPTIONAL LAYER)
+---------------------------
+  Use case     : Rate-limit SOS events per user (prevent spam)
+                 Cache route risk scores (60-min TTL)
+                 Session tokens for public tracking links
+
+
+================================================================================
+10. DATABASE SCHEMA (ALL TABLES)
+================================================================================
+
+--- SHARED TABLES ---
+
+TABLE: users
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  email           text UNIQUE NOT NULL
+  phone           text
+  full_name       text
+  role            text CHECK (role IN ('woman','child','parent','admin'))
+  module          text CHECK (module IN ('m1','m2','m3'))
+  created_at      timestamptz DEFAULT now()
+
+TABLE: trusted_contacts
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  user_id         uuid REFERENCES users(id)
+  contact_name    text NOT NULL
+  contact_phone   text NOT NULL
+  contact_email   text
+  is_trusted_adult boolean DEFAULT false
+  created_at      timestamptz DEFAULT now()
+
+TABLE: notification_log
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  user_id         uuid REFERENCES users(id)
+  sos_event_id    uuid
+  channel         text  -- 'sms'|'whatsapp'|'voice'|'push'|'email'
+  recipient_phone text
+  status          text  -- 'sent'|'delivered'|'failed'
+  sent_at         timestamptz DEFAULT now()
+
+--- MODULE 1 + 2 TABLES ---
+
+TABLE: sos_events
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  user_id         uuid REFERENCES users(id)
+  module          text CHECK (module IN ('m1','m2'))
+  trigger_type    text  -- 'audio'|'motion'|'eta'|'squeeze'|'manual'|'zone_exit'
+  threat_score    int   -- 0–100
+  lat             float8
+  lng             float8
+  audio_clip_url  text  -- Supabase Storage URL
+  track_token     text  -- public tracking page token
+  resolved        boolean DEFAULT false
+  created_at      timestamptz DEFAULT now()
+
+TABLE: location_pings
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  user_id         uuid REFERENCES users(id)
+  sos_event_id    uuid REFERENCES sos_events(id)
+  lat             float8 NOT NULL
+  lng             float8 NOT NULL
+  accuracy        float8
+  recorded_at     timestamptz DEFAULT now()
+
+TABLE: audio_clips
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  user_id         uuid REFERENCES users(id)
+  sos_event_id    uuid REFERENCES sos_events(id)
+  storage_url     text NOT NULL
+  duration_sec    int
+  yamnet_class    text   -- top YAMNet classification label
+  yamnet_score    float8
+  created_at      timestamptz DEFAULT now()
+
+TABLE: trusted_zones  (Module 2 only)
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  child_id        uuid REFERENCES users(id)
+  label           text  -- 'school'|'home'|'tutor'|'custom'
+  polygon         geometry(Polygon, 4326)  -- PostGIS polygon
+  active_days     int[] -- [1,2,3,4,5] = Mon–Fri
+  active_start    time
+  active_end      time
+  created_at      timestamptz DEFAULT now()
+
+TABLE: guardian_pings
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  sos_event_id    uuid REFERENCES sos_events(id)
+  guardian_user_id uuid REFERENCES users(id)
+  distance_m      float8
+  responded       boolean DEFAULT false
+  created_at      timestamptz DEFAULT now()
+
+--- MODULE 3 TABLES ---
+
+TABLE: contact_risk_scores
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  child_id        uuid REFERENCES users(id)
+  contact_hash    text  -- hashed contact ID, not raw phone
+  grooming_score  float8
+  behaviour_delta float8
+  content_score   float8
+  composite_score float8
+  risk_category   text  -- 'low'|'moderate'|'high'|'critical'
+  top_flags       text[]
+  scored_at       timestamptz DEFAULT now()
+
+TABLE: behaviour_baselines
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  child_id        uuid REFERENCES users(id)
+  app_name        text
+  avg_daily_min   float8   -- 4-week baseline in minutes
+  late_night_freq float8   -- avg late-night sessions per week
+  updated_at      timestamptz DEFAULT now()
+
+TABLE: app_usage_log
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  child_id        uuid REFERENCES users(id)
+  app_name        text
+  session_start   timestamptz
+  session_end     timestamptz
+  duration_min    float8
+  is_late_night   boolean
+
+TABLE: weekly_digests
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  child_id        uuid REFERENCES users(id)
+  parent_id       uuid REFERENCES users(id)
+  narrative       text   -- GPT-4o-mini plain English summary
+  conversation_starter text
+  composite_risk  float8
+  pdf_url         text   -- Supabase Storage
+  week_start      date
+  created_at      timestamptz DEFAULT now()
+
+TABLE: content_flags
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  child_id        uuid REFERENCES users(id)
+  flag_type       text  -- 'nsfw_image'|'dns_block'|'search_cluster'
+  score           float8
+  category        text
+  flagged_at      timestamptz DEFAULT now()
+
+
+================================================================================
+11. API SPECIFICATION (ALL ENDPOINTS)
+================================================================================
+
+BASE URL: https://api.safeguard.app (prod) | http://localhost:8000 (dev)
+
+All endpoints require:
+  Header: Authorization: Bearer <jwt_token>
+  Header: Content-Type: application/json
+  Header: X-Module: m1|m2|m3
+
+--- SOS & LOCATION ---
+
+POST /api/sos
+  Description  : Fire an SOS event (auto or manual trigger)
+  Auth         : Required (woman or child role)
+  Request body :
+    {
+      "user_id": "uuid",
+      "lat": 12.9716,
+      "lng": 77.5946,
+      "trigger_type": "audio|motion|eta|squeeze|manual|zone_exit",
+      "threat_score": 78,
+      "audio_clip_b64": "base64string|null"
+    }
+  Response 200 :
+    {
+      "sos_event_id": "uuid",
+      "track_token": "abc123",
+      "track_url": "https://safeguard.app/track/abc123",
+      "notifications_queued": 3
+    }
+  Side effects : Creates sos_events row, queues notification worker,
+                 uploads audio to Supabase Storage, pings guardian network
+
+POST /api/location
+  Description  : Stream live location during active SOS
+  Auth         : Required
+  Request body : { "user_id": "uuid", "sos_event_id": "uuid",
+                   "lat": float, "lng": float, "accuracy": float }
+  Response 200 : { "received": true }
+  Side effects : Inserts location_pings row, broadcasts via Supabase Realtime
+
+GET /api/track/:token
+  Description  : Public page — live location of user with this token
+  Auth         : None (public, token-gated)
+  Response 200 :
+    {
+      "user_name": "Priya",
+      "last_lat": 12.9716,
+      "last_lng": 77.5946,
+      "last_seen": "2024-01-15T22:34:00Z",
+      "audio_clip_url": "https://...",
+      "sos_active": true
+    }
+
+PATCH /api/sos/:id/resolve
+  Description  : Mark SOS event as resolved (safe arrival or admin resolve)
+  Auth         : Required (user or admin)
+  Request body : { "resolved_by": "user|admin", "notes": "string|null" }
+  Response 200 : { "resolved": true }
+
+--- THREAT & AI ---
+
+POST /api/threat
+  Description  : Report a threat signal from on-device sensors
+  Auth         : Required
+  Request body :
+    {
+      "user_id": "uuid",
+      "module": "m1|m2",
+      "signal_type": "audio|motion|eta|zone_exit",
+      "confidence": 0.72,
+      "lat": float,
+      "lng": float
+    }
+  Response 200 :
+    {
+      "threat_score": 76,
+      "action": "monitor|ping_user|auto_sos",
+      "sos_event_id": "uuid|null"
+    }
+  Logic        : Threat fusion engine combines all active signals for this
+                 user, returns composite score + recommended action
+
+GET /api/risk
+  Description  : Get route risk score before journey
+  Auth         : Required
+  Query params : ?destination=12.9716,77.5946&time=22:30&user_id=uuid
+  Response 200 :
+    {
+      "risk_score": 4,
+      "risk_label": "High",
+      "reasoning": "This area has elevated incident reports after 9pm...",
+      "safe_alternative": "Route via MG Road is rated 2/5 at this hour",
+      "nearby_safe_zones": [
+        { "name": "Koramangala Police Station", "lat": ..., "lng": ... }
+      ]
+    }
+
+--- MODULE 3 ---
+
+POST /api/digest
+  Description  : Trigger weekly digest generation for a child
+  Auth         : Required (parent role)
+  Request body : { "child_id": "uuid", "parent_id": "uuid" }
+  Response 200 :
+    {
+      "digest_id": "uuid",
+      "composite_risk": 34.5,
+      "narrative": "This week your child...",
+      "conversation_starter": "A natural way to bring this up...",
+      "pdf_url": "https://..."
+    }
+
+POST /api/contact-score
+  Description  : Receive grooming score from on-device classifier
+  Auth         : Required (child device)
+  Request body :
+    {
+      "child_id": "uuid",
+      "contact_hash": "sha256_hash",
+      "grooming_score": 0.72,
+      "flags": ["secrecy_language", "platform_migration"]
+    }
+  Response 200 : { "received": true, "alert_parent": true|false }
+
+POST /api/behaviour
+  Description  : Submit usage log batch from child device
+  Auth         : Required (child device)
+  Request body :
+    {
+      "child_id": "uuid",
+      "logs": [
+        { "app": "Instagram", "start": "ISO8601", "end": "ISO8601" }
+      ]
+    }
+  Response 200 : { "received": true, "anomaly_detected": true|false }
+
+--- ADMIN / AUTHORITY ---
+
+GET /api/admin/incidents
+  Description  : All SOS incidents for authority dashboard
+  Auth         : Required (admin role)
+  Query params : ?from=ISO8601&to=ISO8601&resolved=false
+  Response 200 :
+    {
+      "incidents": [
+        {
+          "id": "uuid", "user_name": "Priya", "trigger_type": "audio",
+          "threat_score": 82, "lat": float, "lng": float,
+          "audio_url": "...", "resolved": false, "created_at": "..."
+        }
+      ]
+    }
+
+GET /api/admin/heatmap
+  Description  : DBSCAN cluster zones for heatmap rendering
+  Auth         : Required (admin role)
+  Response 200 :
+    {
+      "clusters": [
+        { "centroid_lat": float, "centroid_lng": float,
+          "radius_m": float, "incident_count": int, "risk_level": "high" }
+      ]
+    }
+
+GET /api/admin/stats
+  Description  : Platform-level stats for dashboard header
+  Auth         : Required (admin role)
+  Response 200 :
+    {
+      "active_journeys": 14,
+      "sos_last_24h": 3,
+      "avg_response_sec": 7.2,
+      "guardian_responses": 8
+    }
+
+
+================================================================================
+12. AI/ML COMPONENT SPECIFICATIONS
+================================================================================
+
+12.1 YAMNET — AUDIO THREAT DETECTION
+--------------------------------------
+  Model        : YAMNet (Google) — TFLite quantized, ~3.7MB
+  Input        : 16kHz mono audio, 3-second window
+  Output       : 521-class probability vector
+  Target classes:
+    - Screaming (class 20)     → threat if score >= 0.70 (M1) / 0.55 (M2)
+    - Shouting (class 22)      → threat if score >= 0.65
+    - Crying (class 21)        → threat if score >= 0.60
+    - Glass breaking (class 60)→ threat if score >= 0.75
+  Loop         : Sample every 10 seconds, infer on each sample
+  On-device    : Yes — no audio uploaded until SOS fires
+  Library      : TensorFlow Lite React Native bridge
+
+12.2 THREAT FUSION ENGINE
+--------------------------
+  Language     : Python (FastAPI worker)
+  Algorithm    : Weighted linear combination
+  Inputs       :
+    audio_score     (0–100) weight 0.40
+    motion_score    (0–100) weight 0.25
+    eta_score       (0–100) weight 0.20
+    zone_exit_score (0–100) weight 0.15
+  Time penalty : Add +15 if hour between 22:00–05:00
+  Module delta : Subtract 15 from all thresholds for Module 2 (child)
+  Output       : composite_score (int 0–100) + recommended_action string
+
+12.3 ROUTE RISK SCORER
+-----------------------
+  Model        : GPT-4o-mini (OpenAI)
+  System prompt:
+    "You are a women's safety analyst for Indian cities. Given a destination
+     coordinate, time of day, and nearby crime incident data, return a JSON
+     risk assessment. Be specific and practical."
+  Input data   :
+    - Destination coordinates
+    - Current time + day of week
+    - NCRB crime CSV filtered to destination district
+    - Google Places nearby (police stations, hospitals, metro)
+  Output (JSON):
+    { risk_score: 1–5, risk_label: string, reasoning: string,
+      safe_alternative: string, nearby_safe_zones: [...] }
+  Latency target: < 2 seconds
+
+12.4 MINIML GROOMING CLASSIFIER
+---------------------------------
+  Model        : paraphrase-MiniLM-L3-v2 (quantized ONNX, ~17MB)
+  Runs         : On-device (child's phone)
+  Input        : Conversation metadata + flagged phrase clusters
+                 (NOT raw message text)
+  Features     :
+    - Message frequency per hour (binned)
+    - Contact age estimate (from name patterns)
+    - Platform type (encrypted = higher weight)
+    - Phrase category flags (secrecy, gift, isolation, migration)
+    - Time-of-day distribution of messages
+  Output       : grooming_score (float 0–1), flags (string[])
+  Privacy      : Only score + flags uploaded to server, never raw text
+
+12.5 DBSCAN HEATMAP CLUSTERING
+--------------------------------
+  Library      : scikit-learn DBSCAN
+  Input        : All sos_events lat/lng from last 30 days
+  Parameters   :
+    eps         = 0.005 (roughly 500m at Indian latitudes)
+    min_samples = 3
+  Output       : Cluster centroids + radii → risk zones for authority map
+  Runs         : Nightly cron job + on-demand via /api/admin/heatmap
+  Storage      : Results cached in Supabase as materialized view
+
+12.6 GPT-4O-MINI WEEKLY DIGEST
+--------------------------------
+  Prompt template:
+    "You are a child safety advisor. Given the following weekly data for a
+     child [age], write:
+     1. A plain-English 3-sentence summary for the parent
+     2. A natural conversation starter to discuss concerns without alarm
+     Format as JSON: {narrative, conversation_starter}"
+  Input        : composite_risk, top_flags, behaviour anomalies, content flags
+  Output       : narrative (string), conversation_starter (string)
+  Tone         : Supportive, not alarmist. Empowers parent, doesn't panic.
+
+12.7 BEHAVIOUR BASELINE TRACKER
+---------------------------------
+  Language     : Python (scheduled worker)
+  Algorithm    : Z-score anomaly detection (scipy.stats.zscore)
+  Baseline     : 4-week rolling average per app per child
+  Flag trigger : |z_score| > 2.0 on any metric
+  Metrics tracked:
+    - Daily screen time per app
+    - Late-night session frequency (after 10pm)
+    - New contact message volume
+    - App switching frequency (anxiety indicator)
+
+
+================================================================================
+13. NOTIFICATION DELIVERY SYSTEM
+================================================================================
+
+13.1 DELIVERY CHANNELS
+-----------------------
+  Twilio SMS    : Primary contact notification with live tracking link
+  Twilio Voice  : Auto-call (Module 1: contacts; Module 2: parent first)
+  Twilio WhatsApp: Rich message with map preview link
+  Expo Push     : Guardian network nearby users + parent app alerts
+  Email         : Weekly digest PDF (Module 3)
+
+13.2 SMS TEMPLATE
+------------------
+  "⚠ ALERT: [Name] may need help.
+   Last location: [Google Maps link]
+   Live tracking: https://safeguard.app/track/[TOKEN]
+   Audio evidence: [Supabase URL]
+   Sent by SafeGuard at [TIME]"
+
+13.3 WHATSAPP TEMPLATE
+-----------------------
+  "🚨 *SafeGuard Alert*
+   *[Name]* triggered an emergency alert.
+   📍 *Location*: [address]
+   🔊 *Audio clip*: [link]
+   📡 *Live tracking*: [link]
+   ⏱ Sent [X] seconds after trigger"
+
+13.4 VOICE CALL SCRIPT (AUTO-DIAL)
+------------------------------------
+  Twilio TwiML:
+  "This is an automated call from SafeGuard. [Name] may be in danger.
+   Their last known location is [address]. A live tracking link has been
+   sent to your phone via SMS. Press 1 to confirm you received this message."
+
+13.5 ESCALATION TIMING
+------------------------
+  Module 1 (Women):
+    T+0s   : SMS to all trusted contacts
+    T+0s   : WhatsApp to all trusted contacts
+    T+30s  : Voice call to first contact if no SMS response
+    T+60s  : Authority dashboard incident created
+    T+60s  : Guardian network geo-ping within 500m
+
+  Module 2 (Child):
+    T+0s   : Voice call to parent (Twilio auto-dial)
+    T+30s  : Push notification to trusted adult list
+    T+60s  : SMS + WhatsApp to all contacts
+    T+90s  : Authority dashboard incident created
+
+
+================================================================================
+14. AUTHORITY DASHBOARD
+================================================================================
+
+14.1 OVERVIEW
+-------------
+  A web dashboard for police / safety authorities showing real-time
+  SOS incidents, risk heatmaps, and audio evidence. This is the "judge
+  wow screen" — demonstrates that individual safety feeds city intelligence.
+
+14.2 SCREENS
+------------
+  SCREEN 1: Live incident map
+    - Leaflet.js map centered on city
+    - SOS pins colour-coded by threat score:
+        Green  = score 0–40 (resolved)
+        Amber  = score 40–70 (moderate)
+        Red    = score 70–100 (critical, active)
+    - Pins update in real-time via Supabase Realtime subscription
+    - Click pin → incident detail panel (user, trigger, audio player, timeline)
+
+  SCREEN 2: Risk heatmap
+    - DBSCAN cluster zones rendered as semi-transparent polygons
+    - Colour intensity = incident density
+    - Time filter: last 7 days / 30 days / 90 days
+    - Hour-of-day filter (shows danger peaks at night)
+
+  SCREEN 3: Case management table
+    - All active + recent incidents
+    - Columns: time, user (anonymized), trigger type, score, audio, status
+    - Audio evidence player inline
+    - Resolve button (marks sos_events.resolved = true)
+    - Export to CSV
+
+  SCREEN 4: Analytics (Recharts)
+    - Incidents per day (bar chart, 30-day)
+    - Trigger type breakdown (pie: audio/motion/eta/squeeze/manual)
+    - Average alert-to-notification latency
+    - Guardian network response rate
+
+14.3 TECH
+----------
+  Framework    : React + Vite
+  Map          : Leaflet.js + react-leaflet
+  Charts       : Recharts
+  Realtime     : Supabase JS client (onSnapshot equivalent)
+  Deploy       : Vercel
+  Auth         : Supabase Auth (admin role only)
+
+
+================================================================================
+15. TECH STACK (FULL)
+================================================================================
+
+MOBILE (Dev 1)
+  Framework      : React Native 0.73 + Expo SDK 50
+  Navigation     : Expo Router
+  Maps           : react-native-maps
+  Location       : expo-location (background mode enabled)
+  Audio          : expo-av (recording + playback)
+  Sensors        : expo-sensors (accelerometer, gyroscope)
+  AI inference   : react-native-tflite (YAMNet) + expo-speech (STT)
+  Push           : expo-notifications
+  HTTP client    : axios
+  State          : Zustand
+
+BACKEND API (Dev 2)
+  Framework      : FastAPI (Python 3.11)
+  ORM            : SQLAlchemy (async) + Supabase Python client
+  Task queue     : BackgroundTasks (FastAPI built-in) → Celery if time allows
+  Geo queries    : PostGIS via psycopg2
+  SMS/Voice      : Twilio Python SDK
+  Push           : Expo Push HTTP API (no SDK needed)
+  Auth           : python-jose (JWT)
+  Rate limiting  : slowapi
+  Containerize   : Docker + docker-compose
+
+AI ENGINE (Dev 3)
+  Language       : Python 3.11
+  Audio model    : TensorFlow Lite (YAMNet) — runs on mobile, scores sent here
+  Text model     : sentence-transformers (MiniLM) — runs on device
+  Clustering     : scikit-learn (DBSCAN)
+  LLM            : OpenAI Python SDK (GPT-4o-mini)
+  Stats          : scipy (z-score anomaly detection)
+  Scheduler      : APScheduler (nightly digest cron)
+  DNS filter     : NextDNS API (HTTP)
+
+DASHBOARDS (Dev 4)
+  Framework      : React 18 + Vite + TypeScript
+  Map            : Leaflet.js + react-leaflet
+  Charts         : Recharts
+  Realtime       : @supabase/supabase-js (Realtime subscriptions)
+  Styling        : Tailwind CSS
+  Deploy         : Vercel (CI/CD from main branch)
+
+DATABASE
+  Primary DB     : Supabase (Postgres 15 + PostGIS extension)
+  Realtime       : Supabase Realtime (WebSocket broadcast)
+  File storage   : Supabase Storage (audio clips, PDFs)
+  Auth           : Supabase Auth (JWT + RLS)
+  Cache          : Redis (optional — Upstash serverless)
+
+EXTERNAL APIS
+  Twilio         : SMS, WhatsApp, Voice (auto-call)
+  OpenAI         : GPT-4o-mini (route risk, digest, coaching)
+  Google Places  : Nearby safe locations (police, hospital, metro)
+  NextDNS        : DNS-level content filtering (Module 3)
+  NCRB data      : Crime statistics CSV (bundled, not live)
+
+DEPLOY
+  API            : Railway (Docker container, always-on)
+  Dashboards     : Vercel (auto-deploy on push to main)
+  Mobile         : Expo Go (demo) → EAS Build (production APK)
+  Local dev      : Docker Compose (api + redis + supabase local)
+
+
+================================================================================
+16. REPOSITORY STRUCTURE
+================================================================================
+
+safeguard/
+├── apps/
+│   ├── mobile/                   ← Dev 1 owns
+│   │   ├── app/                  ← Expo Router screens
+│   │   │   ├── (auth)/
+│   │   │   │   ├── login.tsx
+│   │   │   │   └── onboarding.tsx
+│   │   │   ├── (m1)/             ← Women module screens
+│   │   │   │   ├── home.tsx
+│   │   │   │   ├── journey.tsx
+│   │   │   │   └── route-risk.tsx
+│   │   │   ├── (m2)/             ← Child physical screens
+│   │   │   │   ├── home.tsx
+│   │   │   │   └── parent-setup.tsx
+│   │   │   └── (m3)/             ← Child digital screens
+│   │   │       └── monitor.tsx
+│   │   ├── services/
+│   │   │   ├── audioSentinel.ts  ← YAMNet loop
+│   │   │   ├── motionWatcher.ts  ← accelerometer
+│   │   │   ├── etaGuardian.ts    ← journey timer
+│   │   │   ├── codewordListener.ts
+│   │   │   └── sosApi.ts         ← API calls
+│   │   ├── models/
+│   │   │   └── yamnet.tflite
+│   │   └── package.json
+│   │
+│   ├── api/                      ← Dev 2 owns
+│   │   ├── main.py
+│   │   ├── routers/
+│   │   │   ├── sos.py
+│   │   │   ├── location.py
+│   │   │   ├── threat.py
+│   │   │   ├── risk.py
+│   │   │   ├── digest.py
+│   │   │   └── admin.py
+│   │   ├── workers/
+│   │   │   ├── notification.py   ← Twilio dispatch
+│   │   │   ├── guardian.py       ← 500m geo-query
+│   │   │   └── evidence.py       ← audio upload
+│   │   ├── models/
+│   │   │   └── schemas.py        ← Pydantic models
+│   │   ├── db/
+│   │   │   └── supabase.py
+│   │   ├── requirements.txt
+│   │   └── Dockerfile
+│   │
+│   └── dashboard/                ← Dev 4 owns
+│       ├── src/
+│       │   ├── pages/
+│       │   │   ├── authority/
+│       │   │   │   ├── IncidentMap.tsx
+│       │   │   │   ├── Heatmap.tsx
+│       │   │   │   └── CaseTable.tsx
+│       │   │   ├── parent-m2/
+│       │   │   │   └── LiveView.tsx
+│       │   │   └── parent-m3/
+│       │   │       ├── RiskCard.tsx
+│       │   │       ├── WeeklyDigest.tsx
+│       │   │       └── ConversationCoach.tsx
+│       │   ├── lib/
+│       │   │   └── supabase.ts
+│       │   └── main.tsx
+│       ├── package.json
+│       └── vite.config.ts
+│
+├── services/
+│   └── ai/                       ← Dev 3 owns
+│       ├── threat_fusion.py      ← weighted combiner
+│       ├── route_risk.py         ← GPT-4o-mini scorer
+│       ├── grooming_classifier.py← MiniLM wrapper
+│       ├── behaviour_tracker.py  ← z-score anomaly
+│       ├── heatmap_cluster.py    ← DBSCAN
+│       ├── digest_generator.py   ← GPT weekly narrative
+│       ├── scheduler.py          ← APScheduler cron
+│       └── requirements.txt
+│
+├── supabase/
+│   └── migrations/               ← shared, written once
+│       ├── 001_initial_schema.sql
+│       ├── 002_trusted_zones.sql
+│       ├── 003_module3_tables.sql
+│       └── 004_rls_policies.sql
+│
+├── .env.example
+├── docker-compose.yml
+└── README.md
+
+
+================================================================================
+17. TEAM & BRANCH OWNERSHIP
+================================================================================
+
+DEVELOPER 1 — Mobile + On-device AI
+  Branch       : feat/mobile-core
+  Folder       : /apps/mobile
+  Languages    : TypeScript, React Native
+  Responsible for:
+    - All Expo app screens (M1, M2, M3)
+    - YAMNet audio sentinel loop
+    - Motion anomaly detector
+    - Squeeze SOS gesture
+    - ETA guardian background service
+    - Codeword STT listener
+    - On-device MiniLM grooming classifier bridge
+    - App usage logger (Module 3)
+    - Tracking live page (public)
+    - Fake call UI
+    - Onboarding flow
+
+DEVELOPER 2 — Backend API
+  Branch       : feat/backend-api
+  Folder       : /apps/api
+  Languages    : Python, FastAPI
+  Responsible for:
+    - All 10 API routes (fully implemented)
+    - Supabase schema + migrations
+    - Twilio SMS, WhatsApp, Voice worker
+    - Guardian 500m geo-query (PostGIS)
+    - Evidence vault (Supabase Storage)
+    - JWT auth middleware
+    - Supabase Realtime location broadcast
+    - Docker + Railway deployment
+
+DEVELOPER 3 — AI Engine
+  Branch       : feat/ai-engine
+  Folder       : /services/ai
+  Languages    : Python
+  Responsible for:
+    - Threat fusion engine (weighted combiner + thresholds)
+    - Route risk scorer (GPT-4o-mini integration)
+    - MiniLM grooming classifier (Python service)
+    - Behaviour baseline tracker (z-score)
+    - DBSCAN heatmap clustering
+    - GPT-4o-mini weekly digest generator
+    - Conversation coach prompt
+    - APScheduler nightly cron
+    - Child-tuned threshold constants
+
+DEVELOPER 4 — Dashboards + Full-stack Integration
+  Branch       : feat/dashboard
+  Folder       : /apps/dashboard
+  Languages    : TypeScript, React
+  Responsible for:
+    - Authority dashboard (Leaflet map + Recharts)
+    - Parent M2 live view
+    - Parent M3 risk score cards + weekly digest
+    - Conversation coach display
+    - Supabase Realtime subscriptions
+    - Audio evidence player
+    - Vercel deployment + env vars
+    - Demo data seeding script
+
+
+================================================================================
+18. SPRINT PLAN (24-HOUR EXECUTION)
+================================================================================
+
+T = 0h TO 0h45m — SIMULTANEOUS SETUP (ALL 4 DEVS)
+  Dev 1  : npx create-expo-app apps/mobile → install all deps → push scaffold
+  Dev 2  : fastapi init apps/api → create Supabase project → run migrations
+             → stub all 7 routes with 200 responses → push scaffold
+  Dev 3  : python -m venv services/ai → install deps → write .env.example
+             → write shared TypeScript interfaces → push
+  Dev 4  : npm create vite apps/dashboard → connect Vercel + Railway → push
+  ALL    : git pull main → git checkout -b feat/[own-branch]
+
+T = 0h45m TO 10h — CORE PIPELINE (NON-NEGOTIABLE)
+  Dev 1  : Journey guardian + YAMNet audio loop + POST /api/sos call +
+             location stream + squeeze gesture + Module 2 app screens
+  Dev 2  : POST /api/sos (full) + POST /api/location + GET /api/track/:token +
+             Twilio SMS+WhatsApp worker + trusted radius checker + evidence vault
+  Dev 3  : Threat fusion engine + child-tuned thresholds + route risk scorer
+             (GPT-4o-mini) + expose internal POST /ai/score
+  Dev 4  : Authority dashboard map + parent M2 live view + Supabase Realtime +
+             audio evidence player
+
+  CHECKPOINT at T=10h:
+    Audio trigger → SMS fires → tracking page loads → authority map updates
+    If this does not work end-to-end, DO NOT move on. Fix it first.
+
+T = 10h TO 18h — AI DIFFERENTIATORS
+  Dev 1  : Codeword STT (Whisper) + motion anomaly + safe arrival flow +
+             Module 3 monitor agent + contact metadata extractor
+  Dev 2  : POST /api/threat (fusion hook) + Twilio Voice auto-call +
+             guardian geo-query + POST /api/digest + admin resolve endpoint
+  Dev 3  : DBSCAN heatmap + GPT digest + conversation coach + NSFW aggregator +
+             daily contact risk score + behaviour baseline tracker
+  Dev 4  : Risk heatmap (DBSCAN) + Recharts analytics + conversation coach UI +
+             case management table + Vercel deploy
+
+T = 18h TO 22h — WOW FACTORS + POLISH
+  Dev 1  : Fake call UI + onboarding (contacts, codeword, safe zones) +
+             Expo Go QR generation
+  Dev 2  : Prod Railway deploy + full SOS chain test in prod +
+             seed demo data in Supabase
+  Dev 3  : Tune thresholds on real test audio clips + measure alert latency +
+             prepare accuracy numbers for pitch
+  Dev 4  : Screenshot dashboard with live incident data + parent M3 risk cards
+             with seeded data + weekly digest display
+
+T = 22h TO 24h — DEMO PREP (ALL 4)
+  - Rehearse demo script 3 times (timed)
+  - Assign who speaks each segment
+  - Record 30-second backup demo video (in case connectivity fails on stage)
+  - Prepare 1 slide: "Why SafeGuard is different"
+  - Know your numbers: YAMNet accuracy, avg alert latency, threat thresholds
+
+
+================================================================================
+19. ENVIRONMENT VARIABLES & CONFIGURATION
+================================================================================
+
+All variables go in .env (copy from .env.example, never commit .env to git)
+
+# ---- SUPABASE ----
+SUPABASE_URL=https://xxxx.supabase.co
+SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_KEY=eyJ...          # server-side only, never expose to client
+
+# ---- TWILIO ----
+TWILIO_ACCOUNT_SID=ACxxxx
+TWILIO_AUTH_TOKEN=xxxx
+TWILIO_PHONE_NUMBER=+1234567890      # SMS sender
+TWILIO_WHATSAPP_NUMBER=+1415523886   # WhatsApp sandbox number
+
+# ---- OPENAI ----
+OPENAI_API_KEY=sk-xxxx
+
+# ---- GOOGLE ----
+GOOGLE_PLACES_API_KEY=AIzaxxxx
+
+# ---- NEXTDNS (Module 3) ----
+NEXTDNS_API_KEY=xxxx
+NEXTDNS_PROFILE_ID=xxxx
+
+# ---- APP CONFIG ----
+API_BASE_URL=http://localhost:8000   # change to Railway URL in prod
+JWT_SECRET=your-256-bit-secret
+JWT_ALGORITHM=HS256
+JWT_EXPIRE_MINUTES=1440              # 24 hours
+
+# ---- ALERT THRESHOLDS ----
+M1_AUDIO_THRESHOLD=0.70
+M2_AUDIO_THRESHOLD=0.55
+M1_CONFIRM_WINDOW_SEC=10
+M2_CONFIRM_WINDOW_SEC=5
+M1_MOTION_G_THRESHOLD=2.5
+M2_MOTION_G_THRESHOLD=2.0
+
+# ---- GUARDIAN NETWORK ----
+GUARDIAN_RADIUS_M=500
+GUARDIAN_COOLDOWN_MIN=30             # prevent duplicate pings
+
+# ---- CRON SCHEDULE ----
+DIGEST_CRON=0 8 * * 1               # 8am every Monday
+HEATMAP_CRON=0 2 * * *              # 2am daily
+
+
+================================================================================
+20. DEMO SCRIPT (3 MINUTES)
+================================================================================
+
+SEGMENT 1 — THE HOOK (30 seconds)
+  Speaker   : Team lead
+  Action    : Judge scans Expo QR on their phone
+  Line      : "Most safety apps need you to press a button. SafeGuard doesn't."
+
+SEGMENT 2 — ROUTE RISK (30 seconds)
+  Speaker   : Dev 1 (mobile)
+  Action    : Open app → enter a destination → show risk score returning in 2s
+  Line      : "Before she even leaves — AI scores her route and suggests the
+               safest path based on time of day and crime data."
+
+SEGMENT 3 — PASSIVE AUDIO TRIGGER (45 seconds)
+  Speaker   : Dev 3 (AI)
+  Action    : Enable journey mode → play pre-recorded distress audio clip near mic
+  Line      : "She did nothing. Watch."
+  Then      : SMS arrives on a real phone on stage (show it)
+              Open tracking link — live pin on Leaflet map
+  Line      : "Threat to alert — under 8 seconds. No button pressed."
+
+SEGMENT 4 — AUTHORITY DASHBOARD (30 seconds)
+  Speaker   : Dev 4 (dashboard)
+  Action    : Switch to laptop showing authority dashboard
+  Line      : "This is what the police see — live incident, audio evidence
+               playable, risk heatmap showing where danger clusters."
+
+SEGMENT 5 — CHILD MODULE (15 seconds)
+  Speaker   : Dev 2 (backend)
+  Line      : "Same AI, same speed — but for children, the parent gets the
+               auto-call first. And for digital threats, we detect grooming
+               patterns without reading a single message."
+
+SEGMENT 6 — CLOSE (30 seconds)
+  Speaker   : Team lead
+  Line      : "One platform. Three users. The same passive AI core — adapted
+               for how each person actually faces danger. SafeGuard."
+
+
+================================================================================
+21. PITCH DIFFERENTIATORS
+================================================================================
+
+DIFFERENTIATOR 1 — PASSIVE PROTECTION
+  Others   : Require user to press, hold, shake, or speak loudly
+  SafeGuard: Triggers automatically from audio + motion + missed ETA
+  Proof    : Demo — no one touches the phone, SMS fires in 8 seconds
+
+DIFFERENTIATOR 2 — MULTI-MODAL THREAT FUSION
+  Others   : Single trigger (one button or one sensor)
+  SafeGuard: Combines audio + motion + time + location into one 0–100 score
+  Proof    : Show threat fusion engine combining signals in real-time
+
+DIFFERENTIATOR 3 — CHILD-SPECIFIC DESIGN
+  Others   : Same app as women's with a renamed button
+  SafeGuard: Lower thresholds, faster escalation, parent-first call order,
+             trusted radius zone system, squeeze gesture
+  Proof    : Side-by-side threshold comparison slide
+
+DIFFERENTIATOR 4 — PRIVACY-PRESERVING GROOMING DETECTION
+  Others   : Screenshot every message (invasive, resented, bypassed)
+  SafeGuard: AI reads conversation shape and patterns, NOT content
+             MiniLM runs fully on-device — no message text ever uploaded
+  Proof    : Show the payload sent to server — only a score and flag type
+
+DIFFERENTIATOR 5 — AUTHORITY CITY INTELLIGENCE
+  Others   : Individual app — no data feeds into public safety
+  SafeGuard: Every SOS feeds the authority dashboard heatmap
+             Individual safety becomes city-level intelligence
+  Proof    : Show live incident map + DBSCAN risk zones on authority dashboard
+
+
+================================================================================
+22. RISK & MITIGATION
+================================================================================
+
+RISK 1: YAMNet false positives (music, TV triggering alert)
+  Mitigation : Require 2 consecutive positive samples before flagging
+               Add motion correlation (sound + stillness = lower threat)
+               User can dismiss false alarm within 10s confirm window
+
+RISK 2: Background audio loop drains battery
+  Mitigation : Sample every 10s (not continuous)
+               Reduce to every 30s when journey mode is off
+               Use expo-task-manager for efficient background execution
+
+RISK 3: Twilio latency on first SMS
+  Mitigation : Pre-warm Twilio by sending test ping at app launch
+               Use Twilio Messaging Service (not direct from-number) for speed
+               Target < 3s SMS delivery, < 8s total chain
+
+RISK 4: Child resents monitoring (Module 3)
+  Mitigation : App is transparent — child knows monitoring is on
+               Parent dashboard shows summaries, not raw data
+               Framed as safety, not surveillance — child sees their own score too
+
+RISK 5: MiniLM grooming classifier false positives
+  Mitigation : Require 3+ flag types before alerting parent (not just 1)
+               Parent receives "conversation starter" not "your child is in danger"
+               Score shown as trend over time, not binary alert
+
+RISK 6: Supabase Realtime connection drops during demo
+  Mitigation : Implement reconnection logic with exponential backoff
+               Pre-seed demo data so dashboard looks populated even if live fails
+               Have a 30s recorded backup video
+
+RISK 7: Expo background task killed by OS (iOS)
+  Mitigation : Use expo-task-manager with background fetch
+               Request background location permission explicitly
+               Fallback: foreground service notification keeps app alive
+
+RISK 8: API cold start on Railway
+  Mitigation : Keep minimum 1 instance always running (Railway setting)
+               Pre-warm by pinging /api/health at app launch
+               Health check endpoint returns 200 immediately
+
+
+================================================================================
+23. FUTURE ROADMAP
+================================================================================
+
+POST-HACKATHON V1.1 (Month 1–2)
+  - Real-time language support (Hindi, Tamil, Telugu voice codewords)
+  - EAS Build production APK for Android distribution
+  - Supabase Edge Functions to replace FastAPI for lower latency
+  - NCRB live data integration (if API becomes available)
+
+V1.2 (Month 3–4)
+  - Wearable integration (smartwatch SOS trigger)
+  - Offline mode (SOS SMS via cellular fallback without internet)
+  - School admin portal for bulk child onboarding
+  - Insurance partner integration (incident reports)
+
+V2.0 (Month 6+)
+  - Predictive route AI trained on 12-month city incident data
+  - Federated learning for MiniLM grooming model (improve without privacy loss)
+  - Integration with 112 (national emergency number) API
+  - White-label version for NGOs and police departments
+  - iOS App Store + Google Play Store launch
+
+
+================================================================================
+END OF DOCUMENT
+SafeGuard PRD v1.0
+================================================================================
