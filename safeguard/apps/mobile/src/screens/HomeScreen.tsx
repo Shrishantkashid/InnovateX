@@ -90,7 +90,12 @@ const HomeScreen = ({ navigation }: any) => {
               </GlassCard>
             </TouchableOpacity>
           </View>
-          <TouchableOpacity  style={{    backgroundColor: "#2196F3",    padding: 18,    borderRadius: 12,    marginTop: 20,    alignItems: "center",  }}  onPress={() => navigation.navigate("Journey")}>  <Text    style={{      color: "#fff",      fontWeight: "bold",      fontSize: 16,    }}  >    Safe Journey Home  </Text></TouchableOpacity>
+          <TouchableOpacity
+            style={styles.journeyShortcut}
+            onPress={() => navigation.navigate('Journey')}
+          >
+            <Text style={styles.journeyShortcutText}>Safe Journey Home</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Parent Portal */}
@@ -240,7 +245,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 12,
-  }
+  },
+  journeyShortcut: {
+    backgroundColor: '#2196F3',
+    padding: 18,
+    borderRadius: 12,
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  journeyShortcutText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
 });
 
 export default HomeScreen;

@@ -7,8 +7,8 @@ class Settings(BaseSettings):
     MONGO_DB_NAME: str = "safeguard"
 
     # SANDBOX API (Aadhaar)
-    SANDBOX_API_KEY: str = "key_live_eff84033520944e68f3008326c46613f"
-    SANDBOX_API_SECRET: str = "secret_live_4219889eeced474f95523315ce353179"
+    SANDBOX_API_KEY: Optional[str] = None
+    SANDBOX_API_SECRET: Optional[str] = None
     SANDBOX_BASE_URL: str = "https://api.sandbox.co.in"
 
     # TWILIO

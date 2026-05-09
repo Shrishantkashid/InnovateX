@@ -7,6 +7,8 @@ export interface SignupData {
   phone: string;
   password?: string;
   emergencyContact?: string;
+  aadhaarNumber?: string;
+  aadhaarReferenceId?: string;
   role: UserRole;
 }
 
@@ -22,7 +24,10 @@ export const authService = {
           'Content-Type': 'application/json',
           'Bypass-Tunnel-Reminder': 'true'
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          email: data.email.trim().toLowerCase(),
+        }),
       });
 
       const text = await response.text();
@@ -42,7 +47,11 @@ export const authService = {
 
       return {
         success: true,
-        user: result.user,
+        user: {
+          ...result.user,
+          name: result.user.full_name || result.user.name,
+          uniqueId: result.user.unique_id,
+        },
         token: result.access_token
       };
     } catch (error: any) {
@@ -62,7 +71,7 @@ export const authService = {
           'Content-Type': 'application/json',
           'Bypass-Tunnel-Reminder': 'true'
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
 
       const result = await response.json();
@@ -73,7 +82,11 @@ export const authService = {
 
       return {
         success: true,
-        user: result.user,
+        user: {
+          ...result.user,
+          name: result.user.full_name || result.user.name,
+          uniqueId: result.user.unique_id,
+        },
         token: result.access_token
       };
     } catch (error: any) {

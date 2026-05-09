@@ -28,7 +28,12 @@ const OtpVerificationScreen = ({ navigation, route }: any) => {
       const response = await authService.verifyOtp(otp, referenceId);
       if (response.success) {
         // Complete the signup process
-        const signupResponse = await authService.signup({ ...signupData, role: 'woman' });
+        const signupResponse = await authService.signup({
+          ...signupData,
+          role: 'woman',
+          aadhaarNumber,
+          aadhaarReferenceId: referenceId,
+        });
         if (signupResponse.success) {
           await signIn(signupResponse.user as any, signupResponse.token);
           navigation.navigate('Home');

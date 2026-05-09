@@ -8,6 +8,7 @@ interface User {
   name: string;
   email: string;
   role: UserRole;
+  token?: string;
   uniqueId?: string; // CHILD-XXXXXX or PARENT-XXXXXX
 }
 
@@ -47,10 +48,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signIn = async (userData: User, token?: string) => {
-    setUser(userData);
-    setRoleState(userData.role);
-    await AsyncStorage.setItem('@user_session', JSON.stringify(userData));
-    await AsyncStorage.setItem('@user_role', userData.role || '');
+    const sessionUser = { ...userData, token };
+    setUser(sessionUser);
+    setRoleState(sessionUser.role);
+    await AsyncStorage.setItem('@user_session', JSON.stringify(sessionUser));
+    await AsyncStorage.setItem('@user_role', sessionUser.role || '');
     if (token) await AsyncStorage.setItem('@auth_token', token);
   };
 
