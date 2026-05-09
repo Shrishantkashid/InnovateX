@@ -4,23 +4,23 @@ echo   SafeGuard - Start All Services
 echo ==========================================
 
 echo.
-echo Starting Backend API (Port 8000)...
-start "SafeGuard API" cmd /k "cd apps\api && python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000"
+echo Using deployed Render API...
+echo API: https://innovatex-tq7v.onrender.com
 
 echo.
 echo Starting Dashboard (Vite)...
 start "SafeGuard Dashboard" cmd /k "cd apps\dashboard && npm run dev"
 
 echo.
-echo Starting Mobile App (Expo)...
-start "SafeGuard Mobile" cmd /k "cd apps\mobile && npx expo start --offline -c"
+echo Starting Mobile App (Expo) with Render API...
+start "SafeGuard Mobile" cmd /k "cd apps\mobile && set EXPO_PUBLIC_API_URL=https://innovatex-tq7v.onrender.com&& npx expo start -c"
 
 echo.
 echo ==========================================
 echo   All services are starting in new windows.
 echo ==========================================
 echo.
-echo API: http://localhost:8000/docs
+echo API: https://innovatex-tq7v.onrender.com/docs
 echo Dashboard: http://localhost:5173
 echo.
 pause

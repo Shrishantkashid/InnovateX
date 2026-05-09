@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
+from datetime import datetime, timedelta
 import hashlib
 import hmac
 import uuid
@@ -46,6 +47,7 @@ def get_password_hash(password):
     return f"pbkdf2_sha256${PBKDF2_ITERATIONS}${salt}${digest}"
 import os
 import requests
+from config import settings
 from models.schemas import (
     UserCreate, UserLogin, Token,
     AadhaarOTPRequest, AadhaarOTPResponse, AadhaarVerifyRequest
@@ -58,12 +60,73 @@ load_dotenv()
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
 # Sandbox configuration
-SANDBOX_API_KEY = os.getenv("SANDBOX_API_KEY")
-SANDBOX_API_SECRET = os.getenv("SANDBOX_API_SECRET")
-SANDBOX_BASE_URL = os.getenv("SANDBOX_BASE_URL", "https://api.sandbox.co.in")
+SANDBOX_API_KEY = settings.SANDBOX_API_KEY
+SANDBOX_API_SECRET = settings.SANDBOX_API_SECRET
+SANDBOX_BASE_URL = settings.SANDBOX_BASE_URL.rstrip("/")
+SANDBOX_TOKEN: dict[str, object] = {"value": None, "expires_at": datetime.min}
+VERIFIED_AADHAAR_REFERENCES: dict[str, dict[str, object]] = {}
 
-def aadhaar_demo_otp_response():
-    return {"reference_id": "demo_ref_123", "message": "OTP sent (DEMO MODE)"}
+def live_sandbox_configured() -> bool:
+    return bool(SANDBOX_API_KEY and SANDBOX_API_SECRET and SANDBOX_API_KEY.startswith("key_live"))
+
+def require_sandbox_configured() -> None:
+    if not live_sandbox_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Sandbox Aadhaar credentials are not configured on the backend",
+        )
+
+def is_female_gender(gender: object) -> bool:
+    if gender is None:
+        return False
+    return str(gender).strip().upper().startswith("F")
+
+def get_sandbox_access_token() -> str:
+    expires_at = SANDBOX_TOKEN["expires_at"]
+    if isinstance(expires_at, datetime) and SANDBOX_TOKEN["value"] and expires_at > datetime.utcnow():
+        return str(SANDBOX_TOKEN["value"])
+
+    response = requests.post(
+        f"{SANDBOX_BASE_URL}/authenticate",
+        headers={
+            "x-api-key": SANDBOX_API_KEY or "",
+            "x-api-secret": SANDBOX_API_SECRET or "",
+            "x-api-version": "1.0.0",
+        },
+        timeout=20,
+    )
+    data = response.json()
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=data.get("message", "Sandbox authentication failed"),
+        )
+
+    token = data.get("access_token") or data.get("data", {}).get("access_token")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Sandbox authentication did not return an access token",
+        )
+
+    SANDBOX_TOKEN["value"] = token
+    SANDBOX_TOKEN["expires_at"] = datetime.utcnow() + timedelta(hours=20)
+    return str(token)
+
+def sandbox_headers() -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {get_sandbox_access_token()}",
+        "x-api-key": SANDBOX_API_KEY or "",
+        "x-api-version": "1.0.0",
+        "content-type": "application/json",
+    }
+
+@router.get("/aadhaar/status")
+async def aadhaar_status():
+    return {
+        "sandbox_configured": live_sandbox_configured(),
+        "base_url": SANDBOX_BASE_URL,
+    }
 
 @router.post("/signup", response_model=Token)
 async def signup(user_data: UserCreate):
@@ -75,11 +138,20 @@ async def signup(user_data: UserCreate):
         if existing_user:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
 
-        if user_data.role == "woman" and not user_data.aadhaarNumber:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Aadhaar verification is required for women signup",
-            )
+        aadhaar_verification = None
+        if user_data.role == "woman":
+            if not user_data.aadhaarNumber or not user_data.aadhaarReferenceId:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Aadhaar verification is required for women signup",
+                )
+
+            aadhaar_verification = VERIFIED_AADHAAR_REFERENCES.get(user_data.aadhaarReferenceId)
+            if not aadhaar_verification or not aadhaar_verification.get("is_female"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Signup allowed only after Aadhaar verifies the user as female",
+                )
 
         user_id = str(uuid.uuid4())
         hashed_pwd = get_password_hash(user_data.password)
@@ -103,6 +175,7 @@ async def signup(user_data: UserCreate):
             "aadhaar_verified": user_data.role == "woman",
             "aadhaar_last4": user_data.aadhaarNumber[-4:] if user_data.aadhaarNumber else None,
             "aadhaar_reference_id": user_data.aadhaarReferenceId,
+            "aadhaar_gender": aadhaar_verification.get("gender") if aadhaar_verification else None,
         }
         
         saved_profile = await insert_user(profile_payload)
@@ -197,28 +270,20 @@ async def login(credentials: UserLogin):
 @router.post("/aadhaar/otp", response_model=AadhaarOTPResponse)
 async def send_aadhaar_otp(request: AadhaarOTPRequest):
     url = f"{SANDBOX_BASE_URL}/kyc/aadhaar/okyc/otp"
-    headers = {
-        "x-api-key": SANDBOX_API_KEY,
-        "x-api-secret": SANDBOX_API_SECRET,
-        "x-api-version": "1.0",
-        "content-type": "application/json"
-    }
     payload = {
+        "@entity": "in.co.sandbox.kyc.aadhaar.okyc.otp.request",
         "aadhaar_number": request.aadhaar_number,
-        "consent": "y",
+        "consent": "Y",
         "reason": "For identity verification in SafeGuard application"
     }
 
     try:
-        if not SANDBOX_API_KEY or "key_live" not in SANDBOX_API_KEY:
-            return aadhaar_demo_otp_response()
+        require_sandbox_configured()
 
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=sandbox_headers(), timeout=30)
         res_data = response.json()
 
         if response.status_code != 200:
-            if response.status_code in {401, 403}:
-                return aadhaar_demo_otp_response()
             raise HTTPException(status_code=response.status_code, detail=res_data.get("message", "Aadhaar API Error"))
 
         return {
@@ -228,51 +293,53 @@ async def send_aadhaar_otp(request: AadhaarOTPRequest):
     except HTTPException:
         raise
     except Exception as e:
-        if isinstance(e, requests.RequestException):
-            return aadhaar_demo_otp_response()
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @router.post("/aadhaar/verify")
 async def verify_aadhaar_otp(request: AadhaarVerifyRequest):
     url = f"{SANDBOX_BASE_URL}/kyc/aadhaar/okyc/otp/verify"
-    headers = {
-        "x-api-key": SANDBOX_API_KEY,
-        "x-api-secret": SANDBOX_API_SECRET,
-        "x-api-version": "1.0",
-        "content-type": "application/json"
-    }
     payload = {
+        "@entity": "in.co.sandbox.kyc.aadhaar.okyc.request",
         "reference_id": request.reference_id,
         "otp": request.otp
     }
 
     try:
-        if not SANDBOX_API_KEY or "key_live" not in SANDBOX_API_KEY:
-            if request.otp == "123456":
-                return {"success": True, "message": "Verified (DEMO MODE)", "data": {"gender": "F"}}
-            else:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OTP (DEMO MODE)")
+        require_sandbox_configured()
 
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=sandbox_headers(), timeout=30)
         res_data = response.json()
 
         if response.status_code != 200:
-            if response.status_code in {401, 403} and request.otp == "123456":
-                return {"success": True, "message": "Verified (DEMO MODE)", "data": {"gender": "F"}}
             raise HTTPException(status_code=response.status_code, detail=res_data.get("message", "Aadhaar Verification Error"))
 
-        gender = res_data.get("data", {}).get("gender")
-        if gender and gender.upper() != "F":
-             return {"success": False, "message": "Verification failed: User gender must be Female for this role.", "data": res_data.get("data")}
+        response_data = res_data.get("data", {})
+        if response_data.get("status") != "VALID":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=response_data.get("message", "Aadhaar OTP verification failed"),
+            )
+
+        gender = response_data.get("gender")
+        if not is_female_gender(gender):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Verification failed: Aadhaar must identify the user as female for this role.",
+            )
+
+        VERIFIED_AADHAAR_REFERENCES[request.reference_id] = {
+            "gender": gender,
+            "is_female": True,
+            "verified_at": datetime.utcnow().isoformat(),
+            "mode": "sandbox",
+        }
 
         return {
             "success": True,
             "message": "Aadhaar verified successfully",
-            "data": res_data.get("data")
+            "data": response_data
         }
     except HTTPException:
         raise
     except Exception as e:
-        if isinstance(e, requests.RequestException) and request.otp == "123456":
-            return {"success": True, "message": "Verified (DEMO MODE)", "data": {"gender": "F"}}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
